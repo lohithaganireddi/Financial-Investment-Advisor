@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-09-15 (Day 2: Backend Foundation & Health Check API)
+
+### Added
+- Installed `fastapi` (0.141.1) and `uvicorn[standard]` (0.53.0) inside project `venv`.
+- Created `requirements.txt` documenting core backend dependencies.
+- Created `backend/main.py` entry point with a minimal FastAPI application instance.
+- Implemented `GET /` root welcome endpoint returning API metadata and docs link.
+- Implemented `GET /health` service health check endpoint returning JSON status.
+- Verified live server responses and interactive OpenAPI documentation at `/docs`.
+
+---
+
 ## [0.1.0] - 2026-09-15 (Day 1: Project Foundation)
 
 ### Added
