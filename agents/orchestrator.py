@@ -1,35 +1,44 @@
-"""
+﻿"""
 Orchestrator Module
 
 This module implements the decision-driven Orchestrator, which dynamically coordinates
 specialized AI agents (StockAgent / CryptoAgent, NewsAgent, RiskAgent, PortfolioAgent)
 into a decision-driven multi-agent workflow for analyzing financial assets.
 
+Architecture (Day 29)
+---------------------
+An AnalysisContext is created at the start of each run_intent() call.
+The context is passed by reference through the pipeline; each agent execution
+updates it with its result.  Downstream decision functions read from the context,
+making the agent-to-agent information flow explicit and testable.
+
 Agentic Workflow & Decision Logic
 ---------------------------------
 1. Intent Classification:
-   - STOCK_ANALYSIS       → StockAgent (required) → NewsAgent → RiskAgent → PortfolioAgent
-   - CRYPTO_ANALYSIS      → CryptoAgent (required) → NewsAgent → RiskAgent → PortfolioAgent
-   - GENERAL_FINANCIAL_NEWS → NewsAgent only
-   - UNSUPPORTED          → Zero agents executed, clean structured error returned.
+   - STOCK_ANALYSIS         -> StockAgent (required) -> NewsAgent -> RiskAgent -> PortfolioAgent
+   - CRYPTO_ANALYSIS        -> CryptoAgent (required) -> NewsAgent -> RiskAgent -> PortfolioAgent
+   - GENERAL_FINANCIAL_NEWS -> NewsAgent only
+   - UNSUPPORTED            -> Zero agents executed; clean structured error returned.
 
-2. Decision Functions:
+2. Decision Functions (deterministic, read from AnalysisContext):
    - should_fetch_news(intent, news_query)
    - should_analyze_risk(intent, market_data)
    - should_generate_portfolio_recommendation(intent, market_data, risk_data, news_data)
 
-3. Intermediate Evaluation & Failure Decisions:
-   - Market Agent Failure  → HALT. RiskAgent and PortfolioAgent are NOT executed.
-   - News Agent Failure    → CONTINUE to RiskAgent (market data is sufficient).
-                             PortfolioAgent is SKIPPED — news context is unavailable
+3. Failure Handling:
+   - Market Agent Failure -> HALT. RiskAgent and PortfolioAgent are NOT executed.
+   - News Agent Failure   -> CONTINUE to RiskAgent (market data is sufficient).
+                             PortfolioAgent is SKIPPED - news context is unavailable
                              and fabricating sentiment is not acceptable for a financial
                              intelligence application.  news_data is preserved as the
-                             raw failure dict; no synthetic "success" flag is injected.
-   - Risk Agent Failure    → HALT. PortfolioAgent requires verified risk metrics; recommendation is NOT generated.
+                             raw failure dict; no synthetic success flag is injected.
+   - Risk Agent Failure   -> HALT. PortfolioAgent requires verified risk metrics.
 """
 
+import time
 from typing import Any, Dict, Optional
 
+from agents.analysis_context import AnalysisContext
 from agents.stock_agent import StockAgent
 from agents.crypto_agent import CryptoAgent
 from agents.news_agent import NewsAgent
@@ -40,7 +49,7 @@ from agents.portfolio_agent import PortfolioAgent
 class Orchestrator:
     """
     Coordinates StockAgent / CryptoAgent, NewsAgent, RiskAgent, and PortfolioAgent
-    into a decision-driven multi-agent workflow.
+    into a decision-driven multi-agent workflow backed by a shared AnalysisContext.
 
     All agents support dependency injection so the orchestrator is fully testable
     with mock objects without live network calls.
@@ -49,7 +58,7 @@ class Orchestrator:
     # Supported asset types accepted by the run() method
     _SUPPORTED_ASSET_TYPES = {"stock", "crypto"}
 
-    # Intent constants — must match QueryInterpreter intent values exactly
+    # Intent constants - must match QueryInterpreter intent values exactly
     INTENT_STOCK = "STOCK_ANALYSIS"
     INTENT_CRYPTO = "CRYPTO_ANALYSIS"
     INTENT_NEWS = "GENERAL_FINANCIAL_NEWS"
@@ -159,16 +168,34 @@ class Orchestrator:
             return self.crypto_agent.analyze_crypto(asset)
 
     # -----------------------------------------------------------------------
+    # Context-aware decision helpers (read from AnalysisContext)
+    # -----------------------------------------------------------------------
+
+    def _ctx_should_fetch_news(self, ctx: AnalysisContext) -> bool:
+        """Context-aware wrapper around should_fetch_news."""
+        return self.should_fetch_news(ctx.intent, ctx.news_query)
+
+    def _ctx_should_analyze_risk(self, ctx: AnalysisContext) -> bool:
+        """Context-aware wrapper around should_analyze_risk."""
+        return self.should_analyze_risk(ctx.intent, ctx.market_data)
+
+    def _ctx_should_generate_portfolio(self, ctx: AnalysisContext) -> bool:
+        """Context-aware wrapper around should_generate_portfolio_recommendation."""
+        return self.should_generate_portfolio_recommendation(
+            ctx.intent, ctx.market_data, ctx.risk_data, ctx.news_data
+        )
+
+    # -----------------------------------------------------------------------
     # Decision-Driven Intent Workflow Method
     # -----------------------------------------------------------------------
 
     def run_intent(self, interpreted: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Dynamically route a pre-interpreted query through a decision-driven agent workflow
-        evaluating intermediate outputs and recording activity telemetry.
+        Dynamically route a pre-interpreted query through a decision-driven agent workflow,
+        updating a shared AnalysisContext after each step.
 
         :param interpreted: Dict returned by QueryInterpreter.interpret().
-        :return: Structured response dict including ``agents_used`` and ``agent_activity``.
+        :return: Structured response dict including agents_used and agent_activity.
         """
         if not isinstance(interpreted, dict):
             return {
@@ -199,50 +226,59 @@ class Orchestrator:
         # --- GENERAL_FINANCIAL_NEWS: NewsAgent only -------------------------
         if intent == self.INTENT_NEWS:
             news_query = interpreted.get("news_query") or "finance"
-            agents_used = ["NewsAgent"]
-            agent_activity = []
-
+            ctx = AnalysisContext(
+                intent=intent,
+                news_query=news_query,
+                original_query=interpreted.get("query", ""),
+            )
+            ctx.agents_used.append("NewsAgent")
+            t0 = time.monotonic()
             try:
                 news_data = self.news_agent.analyze_news(query=news_query)
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                ctx.news_data = news_data
                 if news_data.get("success"):
-                    agent_activity.append({
-                        "agent": "NewsAgent",
-                        "status": "success",
-                        "order": 1,
-                        "summary": f"Financial news analysis completed for query '{news_query}'",
-                        "decision": "News context retrieved for general news request.",
-                    })
+                    ctx.record_activity(
+                        agent="NewsAgent",
+                        status="success",
+                        summary=f"Financial news analysis completed for query '{news_query}'",
+                        decision="News context retrieved for general news request.",
+                        duration_ms=duration_ms,
+                    )
                 else:
-                    agent_activity.append({
-                        "agent": "NewsAgent",
-                        "status": "failed",
-                        "order": 1,
-                        "summary": f"NewsAgent failed: {news_data.get('error', 'Unknown error')}",
-                        "decision": "NewsAgent returned failure response.",
-                    })
+                    ctx.record_activity(
+                        agent="NewsAgent",
+                        status="failed",
+                        summary=f"NewsAgent failed: {news_data.get('error', 'Unknown error')}",
+                        decision="NewsAgent returned failure response.",
+                        duration_ms=duration_ms,
+                    )
             except Exception as exc:
-                agent_activity.append({
-                    "agent": "NewsAgent",
-                    "status": "failed",
-                    "order": 1,
-                    "summary": f"NewsAgent error: {exc}",
-                    "decision": "NewsAgent raised exception.",
-                })
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                ctx.news_data = {"success": False, "agent": "NewsAgent", "error": str(exc)}
+                ctx.record_activity(
+                    agent="NewsAgent",
+                    status="failed",
+                    summary=f"NewsAgent error: {exc}",
+                    decision="NewsAgent raised exception.",
+                    duration_ms=duration_ms,
+                )
                 return {
                     "success": False,
                     "agent": "Orchestrator",
                     "intent": intent,
-                    "agents_used": agents_used,
-                    "agent_activity": agent_activity,
+                    "agents_used": ctx.agents_used,
+                    "agent_activity": ctx.agent_activity,
                     "error": f"News agent raised an unexpected error: {exc}",
                 }
 
+            news_data = ctx.news_data
             return {
                 "success": news_data.get("success", False),
                 "agent": "Orchestrator",
                 "intent": intent,
-                "agents_used": agents_used,
-                "agent_activity": agent_activity,
+                "agents_used": ctx.agents_used,
+                "agent_activity": ctx.agent_activity,
                 "news_data": news_data,
                 "summary": news_data.get("summary", ""),
                 "disclaimer": (
@@ -260,229 +296,236 @@ class Orchestrator:
             asset_type = interpreted.get("asset_type", "")
             asset = interpreted.get("asset", "")
             news_query = interpreted.get("news_query") or "finance"
-            agents_used = []
-            agent_activity = []
 
-            # Step 1: Execute required Market Agent
+            # Initialise shared context for this analysis run
+            ctx = AnalysisContext(
+                intent=intent,
+                asset_type=asset_type,
+                asset=asset,
+                news_query=news_query,
+                original_query=interpreted.get("query", ""),
+            )
+            ctx.log_decision(f"Intent resolved to {intent}; beginning decision-driven pipeline.")
+
             market_agent_name = "StockAgent" if asset_type == "stock" else "CryptoAgent"
-            agents_used.append(market_agent_name)
+            ctx.agents_used.append(market_agent_name)
 
+            # Step 1: Execute required Market Agent -------------------------
+            t0 = time.monotonic()
             try:
                 market_data = self._run_market_agent(asset_type, asset)
+                duration_ms = int((time.monotonic() - t0) * 1000)
             except Exception as exc:
-                agent_activity.append({
-                    "agent": market_agent_name,
-                    "status": "failed",
-                    "order": len(agent_activity) + 1,
-                    "summary": f"{market_agent_name} error: {exc}",
-                    "decision": "Market agent exception; halting dependent pipeline.",
-                })
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                ctx.record_activity(
+                    agent=market_agent_name,
+                    status="failed",
+                    summary=f"{market_agent_name} error: {exc}",
+                    decision="Market agent exception; halting dependent pipeline.",
+                    duration_ms=duration_ms,
+                )
                 return {
                     "success": False,
                     "agent": "Orchestrator",
                     "intent": intent,
-                    "agents_used": agents_used,
-                    "agent_activity": agent_activity,
+                    "agents_used": ctx.agents_used,
+                    "agent_activity": ctx.agent_activity,
                     "error": f"Market agent raised an unexpected error: {exc}",
                 }
 
-            if not market_data.get("success"):
-                agent_activity.append({
-                    "agent": market_agent_name,
-                    "status": "failed",
-                    "order": len(agent_activity) + 1,
-                    "summary": f"{market_agent_name} failed: {market_data.get('error', 'Market agent returned a failure response.')}",
-                    "decision": "Market data fetch failed; halting risk and portfolio agents.",
-                })
+            ctx.market_data = market_data
+
+            if not ctx.market_succeeded():
+                ctx.record_activity(
+                    agent=market_agent_name,
+                    status="failed",
+                    summary=f"{market_agent_name} failed: {market_data.get('error', 'Market agent returned a failure response.')}",
+                    decision="Market data fetch failed; halting risk and portfolio agents.",
+                    duration_ms=duration_ms,
+                )
                 return {
                     "success": False,
                     "agent": "Orchestrator",
                     "intent": intent,
-                    "agents_used": agents_used,
-                    "agent_activity": agent_activity,
+                    "agents_used": ctx.agents_used,
+                    "agent_activity": ctx.agent_activity,
                     "step": "market_agent",
                     "error": market_data.get("error", "Market agent returned a failure response."),
                     "market_data": market_data,
                 }
 
-            agent_activity.append({
-                "agent": market_agent_name,
-                "status": "success",
-                "order": len(agent_activity) + 1,
-                "summary": f"{asset} market analysis completed",
-                "decision": "Market data verified; proceeding to news and risk evaluation.",
-            })
+            ctx.record_activity(
+                agent=market_agent_name,
+                status="success",
+                summary=f"{asset} market analysis completed",
+                decision="Market data verified; proceeding to news and risk evaluation.",
+                duration_ms=duration_ms,
+            )
+            ctx.log_decision("Market data verified; context updated.")
 
-            # Step 2: Evaluate and execute News Agent
-            news_data = None
-            if self.should_fetch_news(intent, news_query):
-                agents_used.append("NewsAgent")
+            # Step 2: Context-driven News Agent decision --------------------
+            if self._ctx_should_fetch_news(ctx):
+                ctx.agents_used.append("NewsAgent")
+                t0 = time.monotonic()
                 try:
                     res_news = self.news_agent.analyze_news(query=news_query)
+                    duration_ms = int((time.monotonic() - t0) * 1000)
+                    ctx.news_data = res_news
                     if res_news.get("success"):
-                        news_data = res_news
-                        agent_activity.append({
-                            "agent": "NewsAgent",
-                            "status": "success",
-                            "order": len(agent_activity) + 1,
-                            "summary": f"Financial news sentiment evaluated ({news_data.get('overall_sentiment', 'neutral')})",
-                            "decision": "News sentiment integrated into pipeline.",
-                        })
+                        ctx.record_activity(
+                            agent="NewsAgent",
+                            status="success",
+                            summary=f"Financial news sentiment evaluated ({res_news.get('overall_sentiment', 'neutral')})",
+                            decision="News sentiment integrated into pipeline.",
+                            duration_ms=duration_ms,
+                        )
+                        ctx.log_decision("News data verified; context updated.")
                     else:
-                        news_data = res_news  # preserve real failure dict — no fabrication
-                        agent_activity.append({
-                            "agent": "NewsAgent",
-                            "status": "failed",
-                            "order": len(agent_activity) + 1,
-                            "summary": f"NewsAgent failed: {res_news.get('error', 'News agent returned a failure response.')}",
-                            "decision": (
+                        ctx.record_activity(
+                            agent="NewsAgent",
+                            status="failed",
+                            summary=f"NewsAgent failed: {res_news.get('error', 'News agent returned a failure response.')}",
+                            decision=(
                                 "NewsAgent failed; news context is unavailable. "
                                 "Continuing to RiskAgent. "
                                 "PortfolioAgent will be skipped — fabricating news sentiment is not acceptable."
                             ),
-                        })
+                            duration_ms=duration_ms,
+                        )
+                        ctx.log_decision("NewsAgent failed; PortfolioAgent will be skipped.")
                 except Exception as exc:
-                    news_data = {"success": False, "agent": "NewsAgent", "error": str(exc)}
-                    agent_activity.append({
-                        "agent": "NewsAgent",
-                        "status": "failed",
-                        "order": len(agent_activity) + 1,
-                        "summary": f"NewsAgent error: {exc}",
-                        "decision": (
+                    duration_ms = int((time.monotonic() - t0) * 1000)
+                    ctx.news_data = {"success": False, "agent": "NewsAgent", "error": str(exc)}
+                    ctx.record_activity(
+                        agent="NewsAgent",
+                        status="failed",
+                        summary=f"NewsAgent error: {exc}",
+                        decision=(
                             "NewsAgent raised an exception; news context is unavailable. "
                             "Continuing to RiskAgent. "
                             "PortfolioAgent will be skipped — fabricating news sentiment is not acceptable."
                         ),
-                    })
+                        duration_ms=duration_ms,
+                    )
+                    ctx.log_decision("NewsAgent raised exception; PortfolioAgent will be skipped.")
 
-            # Step 3: Evaluate and execute Risk Agent
-            risk_data = None
-            if self.should_analyze_risk(intent, market_data):
-                agents_used.append("RiskAgent")
+            # Step 3: Context-driven Risk Agent decision --------------------
+            if self._ctx_should_analyze_risk(ctx):
+                ctx.agents_used.append("RiskAgent")
+                t0 = time.monotonic()
                 try:
-                    res_risk = self.risk_agent.analyze_risk(market_data)
+                    res_risk = self.risk_agent.analyze_risk(ctx.market_data)
+                    duration_ms = int((time.monotonic() - t0) * 1000)
+                    ctx.risk_data = res_risk
                     if res_risk.get("success"):
-                        risk_data = res_risk
-                        agent_activity.append({
-                            "agent": "RiskAgent",
-                            "status": "success",
-                            "order": len(agent_activity) + 1,
-                            "summary": f"Risk score evaluated: {risk_data.get('risk_score', 0)} ({risk_data.get('risk_level', 'unknown')})",
-                            "decision": "Risk metrics verified; proceeding to portfolio recommendation.",
-                        })
+                        ctx.record_activity(
+                            agent="RiskAgent",
+                            status="success",
+                            summary=f"Risk score evaluated: {res_risk.get('risk_score', 0)} ({res_risk.get('risk_level', 'unknown')})",
+                            decision="Risk metrics verified; proceeding to portfolio recommendation.",
+                            duration_ms=duration_ms,
+                        )
+                        ctx.log_decision("Risk data verified; context updated.")
                     else:
-                        agent_activity.append({
-                            "agent": "RiskAgent",
-                            "status": "failed",
-                            "order": len(agent_activity) + 1,
-                            "summary": f"RiskAgent failed: {res_risk.get('error', 'Risk agent returned a failure response.')}",
-                            "decision": "Risk analysis failed; halting portfolio recommendation as risk metrics are required.",
-                        })
+                        ctx.record_activity(
+                            agent="RiskAgent",
+                            status="failed",
+                            summary=f"RiskAgent failed: {res_risk.get('error', 'Risk agent returned a failure response.')}",
+                            decision="Risk analysis failed; halting portfolio recommendation as risk metrics are required.",
+                            duration_ms=duration_ms,
+                        )
                         return {
                             "success": False,
                             "agent": "Orchestrator",
                             "intent": intent,
-                            "agents_used": agents_used,
-                            "agent_activity": agent_activity,
+                            "agents_used": ctx.agents_used,
+                            "agent_activity": ctx.agent_activity,
                             "step": "risk_agent",
                             "error": res_risk.get("error", "Risk agent returned a failure response."),
-                            "market_data": market_data,
-                            "news_data": news_data,
+                            "market_data": ctx.market_data,
+                            "news_data": ctx.news_data,
                             "risk_data": res_risk,
                         }
                 except Exception as exc:
-                    agent_activity.append({
-                        "agent": "RiskAgent",
-                        "status": "failed",
-                        "order": len(agent_activity) + 1,
-                        "summary": f"RiskAgent error: {exc}",
-                        "decision": "RiskAgent exception; halting portfolio recommendation.",
-                    })
+                    duration_ms = int((time.monotonic() - t0) * 1000)
+                    ctx.record_activity(
+                        agent="RiskAgent",
+                        status="failed",
+                        summary=f"RiskAgent error: {exc}",
+                        decision="RiskAgent exception; halting portfolio recommendation.",
+                        duration_ms=duration_ms,
+                    )
                     return {
                         "success": False,
                         "agent": "Orchestrator",
                         "intent": intent,
-                        "agents_used": agents_used,
-                        "agent_activity": agent_activity,
+                        "agents_used": ctx.agents_used,
+                        "agent_activity": ctx.agent_activity,
                         "error": f"Risk agent raised an unexpected error: {exc}",
                     }
 
-            # Step 4: Evaluate and execute Portfolio Agent
-            recommendation = None
-            if self.should_generate_portfolio_recommendation(intent, market_data, risk_data, news_data):
-                agents_used.append("PortfolioAgent")
+            # Step 4: Context-driven Portfolio Agent decision ---------------
+            if self._ctx_should_generate_portfolio(ctx):
+                ctx.agents_used.append("PortfolioAgent")
+                t0 = time.monotonic()
                 try:
                     res_rec = self.portfolio_agent.generate_recommendation(
-                        market_data=market_data,
-                        risk_data=risk_data,
-                        news_data=news_data,
+                        market_data=ctx.market_data,
+                        risk_data=ctx.risk_data,
+                        news_data=ctx.news_data,
                     )
+                    duration_ms = int((time.monotonic() - t0) * 1000)
+                    ctx.portfolio_data = res_rec
                     if res_rec.get("success"):
-                        recommendation = res_rec
-                        agent_activity.append({
-                            "agent": "PortfolioAgent",
-                            "status": "success",
-                            "order": len(agent_activity) + 1,
-                            "summary": f"Recommendation generated: {recommendation.get('recommendation', 'unknown').upper()}",
-                            "decision": "Recommendation synthesized from market, risk, and news outputs.",
-                        })
+                        ctx.record_activity(
+                            agent="PortfolioAgent",
+                            status="success",
+                            summary=f"Recommendation generated: {res_rec.get('recommendation', 'unknown').upper()}",
+                            decision="Recommendation synthesized from market, risk, and news outputs.",
+                            duration_ms=duration_ms,
+                        )
+                        ctx.log_decision("Portfolio recommendation generated; context complete.")
                     else:
-                        agent_activity.append({
-                            "agent": "PortfolioAgent",
-                            "status": "failed",
-                            "order": len(agent_activity) + 1,
-                            "summary": f"PortfolioAgent failed: {res_rec.get('error', 'Portfolio agent returned a failure response.')}",
-                            "decision": "Portfolio recommendation failed.",
-                        })
+                        ctx.record_activity(
+                            agent="PortfolioAgent",
+                            status="failed",
+                            summary=f"PortfolioAgent failed: {res_rec.get('error', 'Portfolio agent returned a failure response.')}",
+                            decision="Portfolio recommendation failed.",
+                            duration_ms=duration_ms,
+                        )
                         return {
                             "success": False,
                             "agent": "Orchestrator",
                             "intent": intent,
-                            "agents_used": agents_used,
-                            "agent_activity": agent_activity,
+                            "agents_used": ctx.agents_used,
+                            "agent_activity": ctx.agent_activity,
                             "step": "portfolio_agent",
                             "error": res_rec.get("error", "Portfolio agent returned a failure response."),
-                            "market_data": market_data,
-                            "news_data": news_data,
-                            "risk_data": risk_data,
+                            "market_data": ctx.market_data,
+                            "news_data": ctx.news_data,
+                            "risk_data": ctx.risk_data,
                             "recommendation": res_rec,
                         }
                 except Exception as exc:
-                    agent_activity.append({
-                        "agent": "PortfolioAgent",
-                        "status": "failed",
-                        "order": len(agent_activity) + 1,
-                        "summary": f"PortfolioAgent error: {exc}",
-                        "decision": "PortfolioAgent exception.",
-                    })
+                    duration_ms = int((time.monotonic() - t0) * 1000)
+                    ctx.record_activity(
+                        agent="PortfolioAgent",
+                        status="failed",
+                        summary=f"PortfolioAgent error: {exc}",
+                        decision="PortfolioAgent exception.",
+                        duration_ms=duration_ms,
+                    )
                     return {
                         "success": False,
                         "agent": "Orchestrator",
                         "intent": intent,
-                        "agents_used": agents_used,
-                        "agent_activity": agent_activity,
+                        "agents_used": ctx.agents_used,
+                        "agent_activity": ctx.agent_activity,
                         "error": f"Portfolio agent raised an unexpected error: {exc}",
                     }
 
-            # Build successful response
-            return {
-                "success": True,
-                "agent": "Orchestrator",
-                "intent": intent,
-                "agents_used": agents_used,
-                "agent_activity": agent_activity,
-                "asset": asset,
-                "asset_type": asset_type,
-                "market_data": market_data,
-                "news_data": news_data,
-                "risk_data": risk_data,
-                "recommendation": recommendation,
-                "summary": recommendation.get("summary", "") if recommendation else "",
-                "disclaimer": recommendation.get(
-                    "disclaimer",
-                    "This is a software-generated educational recommendation, not financial advice.",
-                ) if recommendation else "",
-            }
+            # Build successful response from context -------------------------
+            return ctx.to_response_dict()
 
         # --- UNSUPPORTED FALLBACK ------------------------------------------
         return {

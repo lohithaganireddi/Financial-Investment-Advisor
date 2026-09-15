@@ -15,6 +15,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend API routes and database setup.
 - Frontend UI dashboard development.
 
+## [0.29.0] - 2026-09-15 (Day 29: Agent-to-Agent Context & Decision State)
+
+### Added
+- Introduced `agents/analysis_context.py` — a new `AnalysisContext` dataclass that represents the shared decision state flowing through the Orchestrator's multi-agent pipeline.
+  - Stores `intent`, `asset_type`, `asset`, `original_query`, `news_query`, and each agent's output (`market_data`, `news_data`, `risk_data`, `portfolio_data`).
+  - Provides `market_succeeded()`, `news_succeeded()`, `risk_succeeded()`, and `portfolio_succeeded()` status helpers for clean conditional logic.
+  - Provides `record_activity()` helper that appends structured activity entries with `agent`, `status`, `order`, `summary`, `decision`, and optional `duration_ms`.
+  - Provides `log_decision()` for appending human-readable rationale strings to the internal `decisions` log.
+  - Provides `to_response_dict()` that serialises only the existing public API fields, keeping the API contract unchanged.
+- Refactored `agents/orchestrator.py` to instantiate `AnalysisContext` at the start of every `run_intent()` call and progressively update it after each agent execution.
+- Added context-aware decision wrappers `_ctx_should_fetch_news()`, `_ctx_should_analyze_risk()`, and `_ctx_should_generate_portfolio()` that read directly from the context instead of isolated local variables.
+- Added `duration_ms` wall-clock timing to every `agent_activity` entry via `time.monotonic()`.
+- Added 15 new Day 29 tests in `tests/test_agents.py` covering:
+  - `AnalysisContext` initial state, status helpers, `record_activity()`, `log_decision()`.
+  - Full stock and crypto pipeline flows (all four agents, duration tracking).
+  - News-only context flow (GENERAL_FINANCIAL_NEWS).
+  - Market failure halts downstream agents.
+  - News failure stores real failure dict — no fabricated sentiment.
+  - Risk failure prevents portfolio execution.
+  - PortfolioAgent receives exact context data (market + risk + news).
+  - Sequential `order` field validation.
+  - API response key backward-compatibility guard.
+
+### Changed
+- `Orchestrator.run_intent()` now builds its final response via `AnalysisContext.to_response_dict()`, eliminating manual dict assembly for the success path.
+- All decision helpers now have both the original signature (for backward-compatible unit tests) and context-aware wrappers used internally.
+- Honest news-failure behaviour from Day 28 preserved: `news_data` remains the real failure dict; `PortfolioAgent` is still skipped when news is unavailable.
+
 ## [0.28.0] - 2026-09-15 (Day 28: Advanced Agentic Orchestration)
 
 ### Added

@@ -12,6 +12,7 @@ from agents.news_agent import NewsAgent
 from agents.risk_agent import RiskAgent
 from agents.portfolio_agent import PortfolioAgent
 from agents.orchestrator import Orchestrator
+from agents.analysis_context import AnalysisContext
 
 
 # ==========================================
@@ -1807,4 +1808,351 @@ def test_day28_crypto_news_failure_portfolio_skipped():
     news_act = next((a for a in activity if a["agent"] == "NewsAgent"), None)
     assert news_act["status"] == "failed"
     assert all(a["agent"] != "PortfolioAgent" for a in activity)
+
+
+# ==========================================
+# Day 29: Shared AnalysisContext Tests
+# ==========================================
+
+# ---- AnalysisContext unit tests (isolated) --------------------------------
+
+def test_day29_analysis_context_initial_state():
+    """A freshly created AnalysisContext has safe, empty defaults."""
+    ctx = AnalysisContext()
+    assert ctx.intent == ""
+    assert ctx.asset_type == ""
+    assert ctx.asset == ""
+    assert ctx.original_query == ""
+    assert ctx.news_query == ""
+    assert ctx.market_data is None
+    assert ctx.news_data is None
+    assert ctx.risk_data is None
+    assert ctx.portfolio_data is None
+    assert ctx.agents_used == []
+    assert ctx.agent_activity == []
+    assert ctx.decisions == []
+
+
+def test_day29_context_market_succeeded_helper():
+    """market_succeeded() returns True only when market_data.success is True."""
+    ctx = AnalysisContext()
+    assert ctx.market_succeeded() is False           # None → False
+
+    ctx.market_data = {"success": False, "agent": "StockAgent", "error": "x"}
+    assert ctx.market_succeeded() is False           # explicit failure → False
+
+    ctx.market_data = {"success": True, "agent": "StockAgent"}
+    assert ctx.market_succeeded() is True            # real success → True
+
+
+def test_day29_context_news_succeeded_helper():
+    """news_succeeded() returns True only when news_data.success is True."""
+    ctx = AnalysisContext()
+    assert ctx.news_succeeded() is False
+
+    ctx.news_data = {"success": False, "agent": "NewsAgent", "error": "timeout"}
+    assert ctx.news_succeeded() is False
+
+    ctx.news_data = {"success": True, "agent": "NewsAgent", "overall_sentiment": "positive"}
+    assert ctx.news_succeeded() is True
+
+
+def test_day29_context_risk_succeeded_helper():
+    """risk_succeeded() returns True only when risk_data.success is True."""
+    ctx = AnalysisContext()
+    assert ctx.risk_succeeded() is False
+
+    ctx.risk_data = {"success": False, "agent": "RiskAgent", "error": "bad input"}
+    assert ctx.risk_succeeded() is False
+
+    ctx.risk_data = {"success": True, "agent": "RiskAgent", "risk_level": "low"}
+    assert ctx.risk_succeeded() is True
+
+
+def test_day29_context_record_activity():
+    """record_activity() appends correctly ordered entries with all required keys."""
+    ctx = AnalysisContext()
+    ctx.record_activity(
+        agent="StockAgent",
+        status="success",
+        summary="AAPL market analysis completed",
+        decision="Market data verified.",
+        duration_ms=120,
+    )
+    ctx.record_activity(
+        agent="NewsAgent",
+        status="failed",
+        summary="NewsAgent failed: timeout",
+        decision="NewsAgent failed; PortfolioAgent will be skipped.",
+    )
+    assert len(ctx.agent_activity) == 2
+    first = ctx.agent_activity[0]
+    assert first["agent"] == "StockAgent"
+    assert first["status"] == "success"
+    assert first["order"] == 1
+    assert first["duration_ms"] == 120
+
+    second = ctx.agent_activity[1]
+    assert second["agent"] == "NewsAgent"
+    assert second["status"] == "failed"
+    assert second["order"] == 2
+    assert "duration_ms" not in second   # omitted when not provided
+
+
+def test_day29_context_log_decision():
+    """log_decision() accumulates rationale strings in decisions list."""
+    ctx = AnalysisContext()
+    ctx.log_decision("Step A: market verified.")
+    ctx.log_decision("Step B: news failed; portfolio skipped.")
+    assert len(ctx.decisions) == 2
+    assert ctx.decisions[0] == "Step A: market verified."
+    assert ctx.decisions[1] == "Step B: news failed; portfolio skipped."
+
+
+# ---- Pipeline integration tests (via Orchestrator with mocks) -----------
+
+def test_day29_stock_context_flows_through_all_agents():
+    """
+    Full STOCK_ANALYSIS pipeline:
+    - All four agents succeed.
+    - agents_used lists all four in order.
+    - agent_activity has 4 entries, all 'success'.
+    - Final response contains market_data, news_data, risk_data, recommendation.
+    - duration_ms present on every activity entry (orchestrator adds it).
+    """
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(85, "buy"),
+    )
+    result = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+
+    assert result["success"] is True
+    assert result["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+    activity = result["agent_activity"]
+    assert len(activity) == 4
+    assert all(a["status"] == "success" for a in activity)
+    assert all("duration_ms" in a for a in activity)   # Day 29: duration tracked
+    assert result["market_data"]["success"] is True
+    assert result["news_data"]["success"] is True
+    assert result["risk_data"]["success"] is True
+    assert result["recommendation"]["success"] is True
+    assert result["recommendation"]["recommendation"] == "buy"
+
+
+def test_day29_crypto_context_flows_through_all_agents():
+    """
+    Full CRYPTO_ANALYSIS pipeline:
+    - CryptoAgent is first; all four agents succeed.
+    - Context updated correctly with crypto market data.
+    """
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        crypto_result=_make_crypto_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("medium"),
+        portfolio_result=_make_recommendation(65, "hold"),
+    )
+    result = orch.run_intent({
+        "success": True, "intent": "CRYPTO_ANALYSIS",
+        "asset_type": "crypto", "asset": "bitcoin", "news_query": "bitcoin",
+    })
+
+    assert result["success"] is True
+    assert result["agents_used"] == ["CryptoAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+    activity = result["agent_activity"]
+    assert len(activity) == 4
+    assert activity[0]["agent"] == "CryptoAgent"
+    assert activity[0]["status"] == "success"
+    assert result["market_data"]["agent"] == "CryptoAgent"
+    assert result["recommendation"]["recommendation"] == "hold"
+
+
+def test_day29_news_only_context():
+    """
+    GENERAL_FINANCIAL_NEWS: only NewsAgent runs.
+    - agents_used = ['NewsAgent']
+    - agent_activity has 1 entry
+    - result carries news_data
+    """
+    orch, _, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        news_result=_make_news_data("neutral"),
+    )
+    result = orch.run_intent({
+        "success": True, "intent": "GENERAL_FINANCIAL_NEWS",
+        "news_query": "cryptocurrency",
+    })
+
+    assert result["success"] is True
+    assert result["agents_used"] == ["NewsAgent"]
+    assert len(result["agent_activity"]) == 1
+    assert result["agent_activity"][0]["agent"] == "NewsAgent"
+    assert result["agent_activity"][0]["status"] == "success"
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day29_market_failure_stops_downstream():
+    """
+    When the market agent fails:
+    - Context stores the failure in market_data.
+    - Pipeline halts; NewsAgent, RiskAgent, PortfolioAgent are NOT called.
+    - agents_used = ['StockAgent'] only.
+    """
+    orch, _, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result={"success": False, "agent": "StockAgent", "error": "Invalid symbol"},
+    )
+    result = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "INVALID", "news_query": "INVALID",
+    })
+
+    assert result["success"] is False
+    assert result["agents_used"] == ["StockAgent"]
+    assert len(result["agent_activity"]) == 1
+    assert result["agent_activity"][0]["status"] == "failed"
+    assert "halting" in result["agent_activity"][0]["decision"]
+    mock_news.analyze_news.assert_not_called()
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day29_news_failure_no_fabrication():
+    """
+    When NewsAgent fails:
+    - news_data in context is the real failure dict (success=False).
+    - No synthetic 'neutral' sentiment is injected.
+    - RiskAgent still runs (market data is sufficient).
+    - PortfolioAgent is NOT called (no real news).
+    - Activity correctly records all three steps.
+    """
+    orch, _, _, _, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result={"success": False, "agent": "NewsAgent", "error": "Rate limit"},
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(85, "buy"),
+    )
+    result = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+
+    assert result["success"] is True
+    # news_data must be the real failure dict — not a synthetic success
+    assert result["news_data"]["success"] is False
+    assert result["news_data"].get("overall_sentiment") is None
+    # PortfolioAgent NOT called
+    mock_portfolio.generate_recommendation.assert_not_called()
+    assert "PortfolioAgent" not in result["agents_used"]
+    # RiskAgent called
+    mock_risk.analyze_risk.assert_called_once()
+    # Activity: 3 entries (StockAgent, NewsAgent, RiskAgent)
+    activity = result["agent_activity"]
+    assert len(activity) == 3
+    news_act = next(a for a in activity if a["agent"] == "NewsAgent")
+    assert news_act["status"] == "failed"
+    assert "fabricating news sentiment is not acceptable" in news_act["decision"]
+
+
+def test_day29_risk_failure_prevents_portfolio():
+    """
+    When RiskAgent fails:
+    - risk_data stored as failure dict in context.
+    - PortfolioAgent is NOT called.
+    - Result is success=False with step='risk_agent'.
+    """
+    orch, _, _, _, _, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result={"success": False, "agent": "RiskAgent", "error": "Corrupt metrics"},
+        portfolio_result=_make_recommendation(85, "buy"),
+    )
+    result = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+
+    assert result["success"] is False
+    assert result.get("step") == "risk_agent"
+    assert "Corrupt metrics" in result["error"]
+    mock_portfolio.generate_recommendation.assert_not_called()
+    assert "PortfolioAgent" not in result["agents_used"]
+
+
+def test_day29_portfolio_receives_correct_context_data():
+    """
+    PortfolioAgent.generate_recommendation() must be called with the exact
+    market_data, risk_data, and news_data that were stored in the context —
+    not copies of local variables from a previous implementation.
+    """
+    stock_result = _make_stock_market_data("bullish")
+    news_result = _make_news_data("positive")
+    risk_result = _make_risk_data("low")
+    portfolio_result = _make_recommendation(85, "buy")
+
+    orch, _, _, _, _, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=stock_result,
+        news_result=news_result,
+        risk_result=risk_result,
+        portfolio_result=portfolio_result,
+    )
+    mock_portfolio.generate_recommendation.return_value = portfolio_result
+
+    result = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+
+    assert result["success"] is True
+    # Verify PortfolioAgent received the exact data from the context
+    call_kwargs = mock_portfolio.generate_recommendation.call_args
+    assert call_kwargs.kwargs["market_data"] == stock_result
+    assert call_kwargs.kwargs["news_data"] == news_result
+    assert call_kwargs.kwargs["risk_data"] == risk_result
+
+
+def test_day29_agent_activity_order_field_is_sequential():
+    """
+    agent_activity order field must be sequential (1, 2, 3, 4) regardless
+    of which agents ran, ensuring dashboard display is always coherent.
+    """
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data(),
+        news_result=_make_news_data(),
+        risk_result=_make_risk_data(),
+        portfolio_result=_make_recommendation(),
+    )
+    result = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+
+    orders = [a["order"] for a in result["agent_activity"]]
+    assert orders == list(range(1, len(orders) + 1))
+
+
+def test_day29_existing_api_response_keys_preserved():
+    """
+    The API response must still contain the same top-level keys it has always
+    returned so that /api/analyze and /api/query remain backward compatible.
+    """
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data(),
+        news_result=_make_news_data(),
+        risk_result=_make_risk_data(),
+        portfolio_result=_make_recommendation(),
+    )
+    result = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+
+    for key in ("success", "agent", "intent", "asset", "asset_type",
+                "agents_used", "agent_activity",
+                "market_data", "news_data", "risk_data", "recommendation",
+                "summary", "disclaimer"):
+        assert key in result, f"Missing expected API response key: '{key}'"
 
