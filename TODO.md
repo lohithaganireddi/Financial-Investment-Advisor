@@ -33,7 +33,7 @@
 - [x] Implement `agents/news_agent.py` for financial sentiment extraction.
 - [x] Implement `agents/risk_agent.py` for market volatility & risk score calculations.
 - [x] Implement `agents/portfolio_agent.py` for rebalancing & recommendations.
-- [ ] Implement multi-agent orchestrator (`agents/orchestrator.py`) to manage agent interaction.
+- [x] Implement multi-agent orchestrator (`agents/orchestrator.py`) to manage agent interaction.
 - [x] Write agent tests in `tests/test_agents.py`.
 
 

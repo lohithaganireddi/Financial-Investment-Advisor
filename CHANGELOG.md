@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.11.0] - 2026-09-15 (Day 11: Multi-Agent Orchestrator)
+
+### Added
+- Created `agents/orchestrator.py` implementing `Orchestrator` — coordinates StockAgent/CryptoAgent, NewsAgent, RiskAgent, and PortfolioAgent into a single end-to-end workflow.
+- `Orchestrator.run(asset_type, asset, news_query)` supports "stock" and "crypto" asset types (case-insensitive).
+- All agents support dependency injection enabling full mock-based testing without live API calls.
+- Safe exception handling at every agent step; failures include a `step` field identifying where the workflow stopped.
+- Final response preserves `market_data`, `news_data`, `risk_data`, and `recommendation` from individual agents.
+- Orchestrator never calls external services directly — delegates all work to existing agents.
+- Exported `Orchestrator` from `agents/__init__.py`.
+- Updated `tests/test_agents.py` with 12 new mock unit tests for `Orchestrator` (72 total unit tests passing across project).
+- Updated `TODO.md` tracking Phase 3 as complete.
+
+---
+
 ## [0.10.0] - 2026-09-15 (Day 10: Portfolio Recommendation Agent Module)
 
 ### Added

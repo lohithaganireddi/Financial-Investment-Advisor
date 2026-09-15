@@ -11,6 +11,7 @@ from agents.crypto_agent import CryptoAgent
 from agents.news_agent import NewsAgent
 from agents.risk_agent import RiskAgent
 from agents.portfolio_agent import PortfolioAgent
+from agents.orchestrator import Orchestrator
 
 
 # ==========================================
@@ -897,3 +898,362 @@ def test_portfolio_agent_crypto_recommendation():
     assert result["recommendation_score"] == 100
     assert result["recommendation"] == "buy"
     assert result["confidence"] == "high"
+
+
+# ==========================================
+# Orchestrator Unit Tests
+# ==========================================
+
+# ---- Shared mock builders -----------------------------------------------
+
+def _make_stock_market_data(direction="bullish"):
+    """Minimal valid StockAgent output."""
+    return {
+        "success": True,
+        "agent": "StockAgent",
+        "symbol": "AAPL",
+        "price": 184.5,
+        "change": 2.5,
+        "change_percent": 1.37,
+        "market_direction": direction,
+    }
+
+def _make_crypto_market_data(direction="bullish"):
+    """Minimal valid CryptoAgent output."""
+    return {
+        "success": True,
+        "agent": "CryptoAgent",
+        "coin_id": "bitcoin",
+        "symbol": "BTC",
+        "name": "Bitcoin",
+        "price": 65000.0,
+        "change_percent_24h": 3.5,
+        "market_direction": direction,
+    }
+
+def _make_news_data(sentiment="positive"):
+    """Minimal valid NewsAgent output."""
+    return {
+        "success": True,
+        "agent": "NewsAgent",
+        "query": "finance",
+        "total_results": 3,
+        "overall_sentiment": sentiment,
+        "articles": [],
+    }
+
+def _make_risk_data(level="low"):
+    """Minimal valid RiskAgent output."""
+    return {
+        "success": True,
+        "agent": "RiskAgent",
+        "asset": "AAPL",
+        "asset_type": "stock",
+        "risk_score": 30,
+        "risk_level": level,
+    }
+
+def _make_recommendation(score=100, rec="buy", confidence="high"):
+    """Minimal valid PortfolioAgent output."""
+    return {
+        "success": True,
+        "agent": "PortfolioAgent",
+        "asset": "AAPL",
+        "asset_type": "stock",
+        "recommendation_score": score,
+        "recommendation": rec,
+        "confidence": confidence,
+        "market_direction": "bullish",
+        "risk_level": "low",
+        "news_sentiment": "positive",
+        "factors": ["Market direction is bullish.", "Risk level is low.", "Financial news sentiment is positive."],
+        "summary": "Based on bullish market conditions, low risk, and positive financial news sentiment, the system recommends BUY for AAPL with high confidence.",
+        "disclaimer": "This is a software-generated educational recommendation, not financial advice.",
+    }
+
+def _make_orchestrator(
+    market_result=None,
+    news_result=None,
+    risk_result=None,
+    recommendation_result=None,
+    asset_type="stock",
+):
+    """
+    Build an Orchestrator whose agents are all replaced with MagicMocks.
+    Returns (orchestrator, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio).
+    """
+    mock_stock     = MagicMock()
+    mock_crypto    = MagicMock()
+    mock_news      = MagicMock()
+    mock_risk      = MagicMock()
+    mock_portfolio = MagicMock()
+
+    if market_result is not None:
+        if asset_type == "stock":
+            mock_stock.analyze_stock.return_value = market_result
+        else:
+            mock_crypto.analyze_crypto.return_value = market_result
+
+    if news_result is not None:
+        mock_news.analyze_news.return_value = news_result
+
+    if risk_result is not None:
+        mock_risk.analyze_risk.return_value = risk_result
+
+    if recommendation_result is not None:
+        mock_portfolio.generate_recommendation.return_value = recommendation_result
+
+    orch = Orchestrator(
+        stock_agent=mock_stock,
+        crypto_agent=mock_crypto,
+        news_agent=mock_news,
+        risk_agent=mock_risk,
+        portfolio_agent=mock_portfolio,
+    )
+    return orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio
+
+
+# ---- Tests ---------------------------------------------------------------
+
+def test_orchestrator_invalid_asset_type():
+    """Non-string or empty asset_type returns a validation error."""
+    orch, *_ = _make_orchestrator()
+    for bad in ["", "   ", 42, None]:
+        result = orch.run(bad, "AAPL")
+        assert result["success"] is False
+        assert result["agent"] == "Orchestrator"
+        assert "asset_type" in result["error"].lower() or "Unsupported" in result["error"]
+
+
+def test_orchestrator_unsupported_asset_type():
+    """An unrecognised asset_type string returns an error naming the bad value."""
+    orch, *_ = _make_orchestrator()
+    result = orch.run("futures", "AAPL")
+    assert result["success"] is False
+    assert result["agent"] == "Orchestrator"
+    assert "futures" in result["error"]
+
+
+def test_orchestrator_invalid_asset():
+    """Empty or whitespace-only asset string returns a validation error."""
+    orch, *_ = _make_orchestrator()
+    for bad in ["", "   ", None, 123]:
+        result = orch.run("stock", bad)
+        assert result["success"] is False
+        assert result["agent"] == "Orchestrator"
+        assert "asset" in result["error"].lower()
+
+
+def test_orchestrator_failed_market_agent():
+    """A failed StockAgent result is surfaced with step='market_agent'."""
+    failed_market = {"success": False, "agent": "StockAgent", "symbol": "AAPL", "error": "API key missing"}
+    orch, *_ = _make_orchestrator(market_result=failed_market, asset_type="stock")
+    result = orch.run("stock", "AAPL")
+    assert result["success"] is False
+    assert result["agent"] == "Orchestrator"
+    assert result.get("step") == "market_agent"
+    assert "API key missing" in result["error"]
+
+
+def test_orchestrator_failed_news_agent():
+    """A failed NewsAgent result is surfaced with step='news_agent'."""
+    failed_news = {"success": False, "agent": "NewsAgent", "query": "AAPL", "error": "News API unavailable"}
+    orch, *_ = _make_orchestrator(
+        market_result=_make_stock_market_data(),
+        news_result=failed_news,
+        asset_type="stock",
+    )
+    result = orch.run("stock", "AAPL")
+    assert result["success"] is False
+    assert result.get("step") == "news_agent"
+    assert "News API unavailable" in result["error"]
+    assert "market_data" in result
+
+
+def test_orchestrator_failed_risk_agent():
+    """A failed RiskAgent result is surfaced with step='risk_agent'."""
+    failed_risk = {"success": False, "agent": "RiskAgent", "error": "Missing percentage field"}
+    orch, *_ = _make_orchestrator(
+        market_result=_make_stock_market_data(),
+        news_result=_make_news_data(),
+        risk_result=failed_risk,
+        asset_type="stock",
+    )
+    result = orch.run("stock", "AAPL")
+    assert result["success"] is False
+    assert result.get("step") == "risk_agent"
+    assert "Missing percentage field" in result["error"]
+
+
+def test_orchestrator_failed_portfolio_agent():
+    """A failed PortfolioAgent result is surfaced with step='portfolio_agent'."""
+    failed_rec = {"success": False, "agent": "PortfolioAgent", "error": "Unsupported market agent"}
+    orch, *_ = _make_orchestrator(
+        market_result=_make_stock_market_data(),
+        news_result=_make_news_data(),
+        risk_result=_make_risk_data(),
+        recommendation_result=failed_rec,
+        asset_type="stock",
+    )
+    result = orch.run("stock", "AAPL")
+    assert result["success"] is False
+    assert result.get("step") == "portfolio_agent"
+
+
+def test_orchestrator_successful_stock_workflow():
+    """
+    Full happy-path for a stock: verify all four agent calls are made in order
+    and the final response contains all expected top-level keys.
+    """
+    market = _make_stock_market_data("bullish")
+    news   = _make_news_data("positive")
+    risk   = _make_risk_data("low")
+    rec    = _make_recommendation(100, "buy", "high")
+
+    orch, mock_stock, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator(
+        market_result=market,
+        news_result=news,
+        risk_result=risk,
+        recommendation_result=rec,
+        asset_type="stock",
+    )
+
+    result = orch.run("stock", "AAPL")
+
+    assert result["success"] is True
+    assert result["agent"] == "Orchestrator"
+    assert result["asset"] == "AAPL"
+    assert result["asset_type"] == "stock"
+    assert "market_data" in result
+    assert "news_data" in result
+    assert "risk_data" in result
+    assert "recommendation" in result
+    assert result["recommendation"]["recommendation"] == "buy"
+    assert result["recommendation"]["confidence"] == "high"
+    assert "summary" in result
+    assert "disclaimer" in result
+
+    # Verify each agent was called exactly once with the correct argument
+    mock_stock.analyze_stock.assert_called_once_with("AAPL")
+    mock_news.analyze_news.assert_called_once_with(query="finance")
+    mock_risk.analyze_risk.assert_called_once_with(market)
+    mock_portfolio.generate_recommendation.assert_called_once_with(
+        market_data=market, risk_data=risk, news_data=news
+    )
+
+
+def test_orchestrator_successful_crypto_workflow():
+    """
+    Full happy-path for a crypto asset: CryptoAgent is used (not StockAgent).
+    """
+    market = _make_crypto_market_data("bullish")
+    news   = _make_news_data("positive")
+    risk   = {
+        "success": True, "agent": "RiskAgent",
+        "asset": "bitcoin", "asset_type": "crypto",
+        "risk_score": 75, "risk_level": "high",
+    }
+    rec = {
+        "success": True, "agent": "PortfolioAgent",
+        "asset": "bitcoin", "asset_type": "crypto",
+        "recommendation_score": 65, "recommendation": "hold",
+        "confidence": "medium", "market_direction": "bullish",
+        "risk_level": "high", "news_sentiment": "positive",
+        "factors": [], "summary": "hold bitcoin", "disclaimer": "Not advice.",
+    }
+
+    orch, _, mock_crypto, mock_news, mock_risk, _ = _make_orchestrator(
+        market_result=market,
+        news_result=news,
+        risk_result=risk,
+        recommendation_result=rec,
+        asset_type="crypto",
+    )
+
+    result = orch.run("crypto", "bitcoin")
+
+    assert result["success"] is True
+    assert result["asset"] == "bitcoin"
+    assert result["asset_type"] == "crypto"
+    assert result["recommendation"]["recommendation"] == "hold"
+    mock_crypto.analyze_crypto.assert_called_once_with("bitcoin")
+    mock_news.analyze_news.assert_called_once_with(query="finance")
+
+
+def test_orchestrator_asset_type_case_insensitive():
+    """'STOCK' and '  Crypto  ' should both be accepted and normalised."""
+    market_s = _make_stock_market_data()
+    market_c = _make_crypto_market_data()
+    news     = _make_news_data()
+    risk     = _make_risk_data()
+    rec      = _make_recommendation()
+
+    # Test uppercase STOCK
+    orch_s, mock_stock, _, _, _, _ = _make_orchestrator(
+        market_result=market_s, news_result=news,
+        risk_result=risk, recommendation_result=rec, asset_type="stock",
+    )
+    result_s = orch_s.run("STOCK", "AAPL")
+    assert result_s["success"] is True
+    assert result_s["asset_type"] == "stock"
+
+    # Test mixed-case + spaces CRYPTO
+    orch_c, _, mock_crypto, _, _, _ = _make_orchestrator(
+        market_result=market_c, news_result=news,
+        risk_result=risk, recommendation_result=rec, asset_type="crypto",
+    )
+    result_c = orch_c.run("  Crypto  ", "bitcoin")
+    assert result_c["success"] is True
+    assert result_c["asset_type"] == "crypto"
+
+
+def test_orchestrator_custom_news_query():
+    """A custom news_query is forwarded to NewsAgent correctly."""
+    market = _make_stock_market_data()
+    news   = _make_news_data()
+    risk   = _make_risk_data()
+    rec    = _make_recommendation()
+
+    orch, _, _, mock_news, _, _ = _make_orchestrator(
+        market_result=market, news_result=news,
+        risk_result=risk, recommendation_result=rec, asset_type="stock",
+    )
+
+    orch.run("stock", "AAPL", news_query="Apple earnings")
+    mock_news.analyze_news.assert_called_once_with(query="Apple earnings")
+
+
+def test_orchestrator_dependency_injection():
+    """Verify that injected mock agents are stored and used by the orchestrator."""
+    mock_stock     = MagicMock()
+    mock_crypto    = MagicMock()
+    mock_news      = MagicMock()
+    mock_risk      = MagicMock()
+    mock_portfolio = MagicMock()
+
+    orch = Orchestrator(
+        stock_agent=mock_stock,
+        crypto_agent=mock_crypto,
+        news_agent=mock_news,
+        risk_agent=mock_risk,
+        portfolio_agent=mock_portfolio,
+    )
+
+    assert orch.stock_agent     is mock_stock
+    assert orch.crypto_agent    is mock_crypto
+    assert orch.news_agent      is mock_news
+    assert orch.risk_agent      is mock_risk
+    assert orch.portfolio_agent is mock_portfolio
+
+
+def test_orchestrator_market_agent_exception_handled():
+    """An exception raised inside StockAgent is caught and returned as an error."""
+    mock_stock = MagicMock()
+    mock_stock.analyze_stock.side_effect = RuntimeError("Unexpected crash")
+
+    orch = Orchestrator(stock_agent=mock_stock)
+    result = orch.run("stock", "AAPL")
+
+    assert result["success"] is False
+    assert result["agent"] == "Orchestrator"
+    assert "Unexpected crash" in result["error"]
