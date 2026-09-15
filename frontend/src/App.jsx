@@ -109,6 +109,7 @@ export default function App() {
             query: record.query,
             asset: record.asset,
             asset_type: record.asset_type,
+            agent_activity: record.agent_activity || [],
             summary: `Historical Analysis Record #${record.id} for "${record.query}".`,
             disclaimer: 'Software-generated historical recommendation record retrieved from SQLite database.',
             recommendation: {

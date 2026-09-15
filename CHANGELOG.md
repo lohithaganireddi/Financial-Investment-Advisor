@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent implementations for Stock, Crypto, News, Risk, and Portfolio analysis.
 - Backend API routes and database setup.
 - Frontend UI dashboard development.
+## [0.23.0] - 2026-09-15 (Day 23: Persist Agent Activity in Analysis History)
+
+### Added
+- Added `agent_activity` column (`Text, nullable=True`) to the `Analysis` SQLAlchemy database model in `backend/models.py`.
+- Updated `AnalysisRepository.save_analysis()` to serialize structured `agent_activity` lists into JSON text when storing records in SQLite.
+- Updated `AnalysisRecordResponse` in `backend/schemas.py` with a `@field_validator` that deserializes stored JSON string back into a list of `AgentActivityItem` objects automatically.
+- Updated `POST /api/query` in `backend/routes.py` to persist the real `agent_activity` returned by `Orchestrator.run_intent()`.
+- Updated `GET /api/history` and `GET /api/history/{id}` to include parsed `agent_activity` in responses, maintaining full backward compatibility for older records (which default safely to `[]`).
+- Updated `handleSelectHistoryRecord` in `frontend/src/App.jsx` to pass stored historical `agent_activity` to `ResultCard` and `AgentDashboard`.
+- Added unit tests in `tests/test_database.py` and `tests/test_api.py` for saving/reading `agent_activity`, JSON parsing, and backward-compatibility with older NULL records.
+
+---
+
 ## [0.22.0] - 2026-09-15 (Day 22: Agent Activity Dashboard)
 
 ### Added

@@ -51,6 +51,8 @@
 - [x] Implement query intent classification (STOCK_ANALYSIS, CRYPTO_ANALYSIS, GENERAL_FINANCIAL_NEWS, UNSUPPORTED) with Dogecoin support and news-only routing.
 - [x] Implement dynamic agent routing via `Orchestrator.run_intent()` — each intent selects a different agent pipeline; all responses include `agents_used` list.
 - [x] Implement structured agent activity tracking (`agent_activity` field in Orchestrator and `POST /api/query`).
+- [x] Persist `agent_activity` in SQLite database history and update history retrieval endpoints (`GET /api/history` and `GET /api/history/{id}`).
+
 - [ ] Implement user authentication (JWT tokens / passwords).
 - [x] Write backend endpoint tests in `tests/test_api.py`.
 

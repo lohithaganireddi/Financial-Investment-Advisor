@@ -5,7 +5,7 @@ Defines the database schema for persisting financial analyses.
 """
 
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Column, DateTime, Integer, String, Text
 from backend.database import Base
 
 
@@ -27,8 +27,10 @@ class Analysis(Base):
     risk_level = Column(String, nullable=True)
     market_direction = Column(String, nullable=True)
     news_sentiment = Column(String, nullable=True)
+    agent_activity = Column(Text, nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False
     )
+

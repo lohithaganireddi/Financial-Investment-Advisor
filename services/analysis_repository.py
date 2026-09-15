@@ -5,7 +5,8 @@ Provides database operations for persisting and retrieving Analysis records.
 Encapsulates SQLAlchemy logic away from API routes.
 """
 
-from typing import List, Optional
+import json
+from typing import Any, List, Optional
 from sqlalchemy.orm import Session
 from backend.database import SessionLocal
 from backend.models import Analysis
@@ -40,6 +41,7 @@ class AnalysisRepository:
         risk_level: Optional[str] = None,
         market_direction: Optional[str] = None,
         news_sentiment: Optional[str] = None,
+        agent_activity: Optional[Any] = None,
         session: Optional[Session] = None
     ) -> Optional[Analysis]:
         """
@@ -49,6 +51,16 @@ class AnalysisRepository:
         """
         db = session or self._external_session or SessionLocal()
         close_needed = (session is None and self._external_session is None)
+
+        activity_json = None
+        if agent_activity is not None:
+            if isinstance(agent_activity, str):
+                activity_json = agent_activity
+            else:
+                try:
+                    activity_json = json.dumps(agent_activity)
+                except Exception:
+                    activity_json = None
 
         try:
             record = Analysis(
@@ -62,7 +74,8 @@ class AnalysisRepository:
                 risk_score=risk_score,
                 risk_level=risk_level,
                 market_direction=market_direction,
-                news_sentiment=news_sentiment
+                news_sentiment=news_sentiment,
+                agent_activity=activity_json
             )
             db.add(record)
             db.commit()
@@ -74,6 +87,7 @@ class AnalysisRepository:
         finally:
             if close_needed:
                 db.close()
+
 
     def get_recent_analyses(
         self,

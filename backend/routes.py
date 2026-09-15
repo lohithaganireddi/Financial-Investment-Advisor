@@ -131,6 +131,7 @@ def analyze_query(
             risk_level=risk_data.get("risk_level") if isinstance(risk_data, dict) else None,
             market_direction=market_data.get("market_direction") if isinstance(market_data, dict) else None,
             news_sentiment=news_data.get("overall_sentiment") if isinstance(news_data, dict) else None,
+            agent_activity=analysis_res.get("agent_activity"),
         )
 
         if saved_record is not None:

@@ -246,7 +246,13 @@ def test_query_endpoint_valid_stock():
             risk_score=30,
             risk_level="low",
             market_direction="bullish",
-            news_sentiment="positive"
+            news_sentiment="positive",
+            agent_activity=[
+                {"agent": "StockAgent", "status": "success", "order": 1, "summary": "AAPL market analysis completed"},
+                {"agent": "NewsAgent", "status": "success", "order": 2, "summary": "Financial news sentiment evaluated (positive)"},
+                {"agent": "RiskAgent", "status": "success", "order": 3, "summary": "Risk score evaluated: 30 (low)"},
+                {"agent": "PortfolioAgent", "status": "success", "order": 4, "summary": "Recommendation generated: BUY"},
+            ]
         )
     finally:
         app.dependency_overrides.clear()
@@ -444,6 +450,7 @@ def test_get_history_by_id_endpoint_success():
         "risk_level": "high",
         "market_direction": "bearish",
         "news_sentiment": "positive",
+        "agent_activity": '[{"agent": "CryptoAgent", "status": "success", "order": 1, "summary": "bitcoin analysis completed"}]',
         "created_at": "2026-09-15T15:00:00Z"
     }
     mock_repo.get_analysis_by_id.return_value = mock_record
@@ -457,7 +464,36 @@ def test_get_history_by_id_endpoint_success():
         assert data["success"] is True
         assert data["analysis"]["id"] == 10
         assert data["analysis"]["asset"] == "bitcoin"
+        assert len(data["analysis"]["agent_activity"]) == 1
+        assert data["analysis"]["agent_activity"][0]["agent"] == "CryptoAgent"
         mock_repo.get_analysis_by_id.assert_called_once_with(analysis_id=10)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_get_history_by_id_older_record_null_agent_activity():
+    """Test GET /api/history/{analysis_id} with older record (null agent_activity) returns empty list."""
+    mock_repo = MagicMock()
+    mock_record = {
+        "id": 5,
+        "query": "Old Stock Query",
+        "asset_type": "stock",
+        "asset": "AAPL",
+        "news_query": "Apple",
+        "recommendation": "buy",
+        "agent_activity": None,
+        "created_at": "2026-09-01T10:00:00Z"
+    }
+    mock_repo.get_analysis_by_id.return_value = mock_record
+
+    app.dependency_overrides[get_repository] = lambda: mock_repo
+
+    try:
+        response = client.get("/api/history/5")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["analysis"]["agent_activity"] == []
     finally:
         app.dependency_overrides.clear()
 
@@ -476,3 +512,4 @@ def test_get_history_by_id_endpoint_not_found():
         assert "not found" in data["detail"].lower()
     finally:
         app.dependency_overrides.clear()
+

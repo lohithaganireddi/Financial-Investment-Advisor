@@ -109,3 +109,30 @@ def test_nullable_fields(db_session):
     assert record.recommendation is None
     assert record.risk_score is None
     assert record.market_direction is None
+    assert record.agent_activity is None
+
+
+def test_save_and_retrieve_agent_activity(db_session):
+    """Test saving structured agent_activity list and retrieving it from repository."""
+    repo = AnalysisRepository(db_session=db_session)
+    activity = [
+        {"agent": "StockAgent", "status": "success", "order": 1, "summary": "AAPL analysis completed"},
+        {"agent": "NewsAgent", "status": "success", "order": 2, "summary": "News sentiment positive"},
+    ]
+    record = repo.save_analysis(
+        query="Should I invest in Apple?",
+        asset_type="stock",
+        asset="AAPL",
+        agent_activity=activity,
+        session=db_session
+    )
+
+    assert record is not None
+    assert record.agent_activity is not None
+    assert "StockAgent" in record.agent_activity
+
+    retrieved = repo.get_analysis_by_id(record.id, session=db_session)
+    assert retrieved is not None
+    assert retrieved.agent_activity is not None
+    assert "StockAgent" in retrieved.agent_activity
+

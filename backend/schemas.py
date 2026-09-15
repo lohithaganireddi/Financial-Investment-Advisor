@@ -4,9 +4,10 @@ Pydantic Request and Response Schemas for Backend API
 Defines the data validation models for API endpoints.
 """
 
+import json
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AnalyzeRequest(BaseModel):
@@ -57,7 +58,6 @@ class QueryResponse(BaseModel):
     error: Optional[str] = None
 
 
-
 class AnalysisRecordResponse(BaseModel):
     """Schema representing a single stored financial analysis record."""
     model_config = ConfigDict(from_attributes=True)
@@ -74,7 +74,22 @@ class AnalysisRecordResponse(BaseModel):
     risk_level: Optional[str] = None
     market_direction: Optional[str] = None
     news_sentiment: Optional[str] = None
+    agent_activity: Optional[List[AgentActivityItem]] = Field(default_factory=list)
     created_at: Optional[datetime] = None
+
+    @field_validator("agent_activity", mode="before")
+    @classmethod
+    def parse_agent_activity(cls, v):
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, list) else []
+            except Exception:
+                return []
+        if v is None:
+            return []
+        return v
+
 
 
 class HistoryListResponse(BaseModel):
