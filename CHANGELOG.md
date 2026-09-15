@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-09-15 (Day 6: Stock Price Agent Module)
+
+### Added
+- Created `agents/stock_agent.py` implementing `StockAgent` using dependency injection with `AlphaVantageService`.
+- Implemented ticker validation, price change parsing (e.g. converting `"1.3736%"` to `1.3736`), market direction evaluation (`bullish`, `bearish`, `neutral`), and text analysis synthesis.
+- Exported `StockAgent` from `agents/__init__.py`.
+- Created `tests/test_agents.py` with 6 unit tests using mock services (24 total unit tests passing).
+- Updated `TODO.md` tracking Phase 3 progress.
+
+---
+
 ## [0.5.0] - 2026-09-15 (Day 5: NewsData Financial News Service Layer)
 
 ### Added

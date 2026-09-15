@@ -28,13 +28,14 @@
 
 ## Phase 3: Multi-Agent Intelligence Engine
 - [ ] Evaluate agent orchestration model (custom lightweight vs. agent framework).
-- [ ] Implement `agents/stock_agent.py` for analyzing equities.
+- [x] Implement `agents/stock_agent.py` for analyzing equities.
 - [ ] Implement `agents/crypto_agent.py` for analyzing crypto assets.
 - [ ] Implement `agents/news_agent.py` for financial sentiment extraction.
 - [ ] Implement `agents/risk_agent.py` for market volatility & risk score calculations.
 - [ ] Implement `agents/portfolio_agent.py` for rebalancing & recommendations.
 - [ ] Implement multi-agent orchestrator (`agents/orchestrator.py`) to manage agent interaction.
-- [ ] Write agent tests in `tests/test_agents.py`.
+- [x] Write agent tests in `tests/test_agents.py`.
+
 
 ---
 
