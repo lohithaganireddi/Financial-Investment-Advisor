@@ -1,18 +1,50 @@
-﻿"""
+"""
 SmartFinancial Advisor (FinSight 2.0) - Backend Application Entry Point
 
-This file initializes the FastAPI backend server, defines health-check endpoints,
+This file initializes the FastAPI backend server, database tables, health-check endpoints,
 and includes API route handlers.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from backend.database import init_db
 from backend.routes import router as api_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan context manager.
+    Initializes database tables on application startup.
+    """
+    init_db()
+    yield
+
 
 # Initialize FastAPI application
 app = FastAPI(
     title="SmartFinancial Advisor API",
     description="Backend service for FinSight 2.0 multi-agent financial intelligence system.",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
+)
+
+# Configure CORS for local development
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include API routes

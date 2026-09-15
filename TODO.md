@@ -46,6 +46,7 @@
 - [x] Implement initial health check (`/health`) and root (`/`) endpoints.
 - [x] Define API request/response schemas in `backend/schemas.py`.
 - [x] Create REST endpoint for financial analysis (`POST /api/analyze`).
+- [x] Implement natural language query interpretation layer (`services/query_interpreter.py`) and `POST /api/query` endpoint.
 - [ ] Setup database models (SQLAlchemy / Alembic) for storing portfolios and search history.
 - [ ] Implement user authentication (JWT tokens / passwords).
 - [x] Write backend endpoint tests in `tests/test_api.py`.
@@ -54,10 +55,10 @@
 ---
 
 ## Phase 5: Frontend Dashboard
-- [ ] Finalize UI framework selection (Streamlit / React / Next.js).
-- [ ] Scaffold frontend project in `frontend/`.
-- [ ] Design stock & crypto search interface.
-- [ ] Build agent interaction feed & summary display.
+- [x] Finalize UI framework selection (React + Vite).
+- [x] Scaffold frontend project in `frontend/`.
+- [x] Design stock & crypto search interface (`AnalysisForm.jsx`).
+- [x] Build agent interaction feed & summary display (`ResultCard.jsx` and `HistoryList.jsx`).
 - [ ] Integrate interactive charts for price action & risk distribution.
 - [ ] Build portfolio input & recommendation dashboard.
 

@@ -2,6 +2,12 @@
 .env
 *.env.local
 
+# SQLite Database
+smartfinance.db
+*.db
+*.sqlite
+*.sqlite3
+
 # Python
 __pycache__/
 *.py[cod]

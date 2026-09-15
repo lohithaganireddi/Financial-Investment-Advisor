@@ -17,6 +17,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.17.0] - 2026-09-15 (Day 17: Frontend Dashboard Foundation)
+
+### Added
+- Selected React + Vite for the frontend framework and scaffolded `frontend/` directory.
+- Created `frontend/src/components/Header.jsx` with application brand header and online status badge.
+- Created `frontend/src/components/AnalysisForm.jsx` supporting both Structured Asset Analysis (`POST /api/analyze`) and Natural Language Query Analysis (`POST /api/query`).
+- Created `frontend/src/components/ResultCard.jsx` for rendering recommendation badges (BUY/HOLD/AVOID), confidence rating, price metrics, risk breakdown, news sentiment, key factors, executive summary, and disclaimer.
+- Created `frontend/src/components/HistoryList.jsx` for rendering recent SQLite database records (`GET /api/history`) with interactive record details lookup (`GET /api/history/{id}`).
+- Configured safe local CORS middleware in `backend/main.py` for localhost development origins (`http://localhost:5173`, `http://127.0.0.1:5173`).
+- Verified zero-error compilation with `npm run build` and verified all 104 Python unit & integration tests pass cleanly.
+- Updated `TODO.md` tracking Phase 5 progress.
+
+---
+
+## [0.16.0] - 2026-09-15 (Day 16: SQLite Database Persistence & History API)
+
+### Added
+- Installed `sqlalchemy==2.0.53` and configured SQLite database connection in `backend/database.py`.
+- Created `Analysis` model in `backend/models.py` for persisting structured analysis results (`query`, `asset_type`, `asset`, `recommendation`, `confidence`, `risk_score`, `risk_level`, `market_direction`, `news_sentiment`, `created_at`).
+- Created `services/analysis_repository.py` with `AnalysisRepository` layer for clean database operations (`save_analysis`, `get_recent_analyses`, `get_analysis_by_id`).
+- Modified `POST /api/query` to automatically persist successful Orchestrator analysis results and return `saved_analysis_id`.
+- Added `GET /api/history` and `GET /api/history/{analysis_id}` REST endpoints in `backend/routes.py`.
+- Updated `backend/schemas.py` with `AnalysisRecordResponse`, `HistoryListResponse`, and `HistoryDetailResponse` schemas.
+- Created `tests/test_database.py` with 6 isolated database unit tests and updated `tests/test_api.py` with 6 persistence/history integration tests (104 total unit tests passing across project).
+- Updated `.gitignore` to protect `smartfinance.db`, `TODO.md`, and `README.md`.
+
+---
+
+## [0.15.0] - 2026-09-15 (Day 15: User Query Interpretation Layer)
+
+### Added
+- Created `services/query_interpreter.py` implementing `QueryInterpreter` for deterministic parsing of natural language user queries into structured asset parameters.
+- Supported mapping for major equities (Apple → AAPL, Microsoft → MSFT, Tesla → TSLA, Amazon → AMZN, Google/Alphabet → GOOGL, NVIDIA → NVDA, Meta → META) and crypto assets (Bitcoin/BTC → bitcoin, Ethereum/ETH → ethereum, Solana/SOL → solana).
+- Added `QueryRequest` schema to `backend/schemas.py`.
+- Created `POST /api/query` route in `backend/routes.py` linking query interpretation with `Orchestrator` workflow while preserving `POST /api/analyze`.
+- Created `tests/test_query_interpreter.py` with 13 unit tests and updated `tests/test_api.py` with 5 unit tests for `POST /api/query` (98 total unit tests passing across project).
+- Updated `TODO.md` tracking Phase 4 progress.
+
+---
+
 ## [0.12.0] - 2026-09-15 (Day 12: Backend API Integration)
 
 ### Added

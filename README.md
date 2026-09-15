@@ -40,6 +40,20 @@ smartfinance_agenticai/
 
 ---
 
+## 🔌 API Endpoints & Persistence
+
+The backend provides a FastAPI service with local SQLite persistence (`smartfinance.db`):
+
+- **`GET /`** – API status and documentation link.
+- **`GET /health`** – Backend service health check.
+- **`POST /api/analyze`** – Direct multi-agent asset analysis endpoint.
+- **`POST /api/query`** – Natural language query analysis & automatic database persistence.
+- **`GET /api/history`** – Retrieve recent saved financial asset analyses (limit 1 to 50).
+- **`GET /api/history/{id}`** – Retrieve a specific saved analysis record by ID.
+
+
+---
+
 ## ⚙️ Getting Started (Day 1 Foundation)
 
 1. **Clone or open the repository**:
