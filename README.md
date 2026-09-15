@@ -51,8 +51,26 @@ The backend provides a FastAPI service with local SQLite persistence (`smartfina
 - **`GET /api/history`** – Retrieve recent saved financial asset analyses (limit 1 to 50).
 - **`GET /api/history/{id}`** – Retrieve a specific saved analysis record by ID.
 
-
 ---
+
+## 🔀 Dynamic Agent Routing
+
+FinSight 2.0 uses **deterministic intent-based routing**. When you send a natural language query, the system:
+
+1. **QueryInterpreter** classifies the query into an intent.
+2. **Orchestrator.run_intent()** selects and executes the correct agent pipeline.
+3. Every response includes an **`agents_used`** list showing exactly which agents ran.
+
+| Intent | Agents Executed | DB Persist? |
+|--------|----------------|-------------|
+| `STOCK_ANALYSIS` | StockAgent → NewsAgent → RiskAgent → PortfolioAgent | ✅ Yes |
+| `CRYPTO_ANALYSIS` | CryptoAgent → NewsAgent → RiskAgent → PortfolioAgent | ✅ Yes |
+| `GENERAL_FINANCIAL_NEWS` | NewsAgent only | ❌ No |
+| `UNSUPPORTED` | None | ❌ No |
+
+This architecture keeps routing logic in one place (the Orchestrator), making it easy to add new intent types in the future.
+
+
 
 ## ⚙️ Getting Started (Day 1 Foundation)
 

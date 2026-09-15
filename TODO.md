@@ -49,6 +49,7 @@
 - [x] Implement natural language query interpretation layer (`services/query_interpreter.py`) and `POST /api/query` endpoint.
 - [x] Setup database models (SQLAlchemy) for storing search history (`backend/models.py`, `backend/database.py`).
 - [x] Implement query intent classification (STOCK_ANALYSIS, CRYPTO_ANALYSIS, GENERAL_FINANCIAL_NEWS, UNSUPPORTED) with Dogecoin support and news-only routing.
+- [x] Implement dynamic agent routing via `Orchestrator.run_intent()` — each intent selects a different agent pipeline; all responses include `agents_used` list.
 - [ ] Implement user authentication (JWT tokens / passwords).
 - [x] Write backend endpoint tests in `tests/test_api.py`.
 

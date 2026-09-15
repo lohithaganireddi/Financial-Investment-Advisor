@@ -1,4 +1,4 @@
-﻿"""
+"""
 Orchestrator Module
 
 This module implements the Orchestrator, which coordinates the existing agents
@@ -6,17 +6,21 @@ into a single end-to-end workflow for analysing a financial asset.
 
 Workflow
 --------
-For a "stock" request:
+For a "stock" request (run / run_intent with STOCK_ANALYSIS):
     1. StockAgent.analyze_stock(asset)
     2. NewsAgent.analyze_news(news_query)
     3. RiskAgent.analyze_risk(market_data)
     4. PortfolioAgent.generate_recommendation(market_data, risk_data, news_data)
 
-For a "crypto" request:
+For a "crypto" request (run / run_intent with CRYPTO_ANALYSIS):
     1. CryptoAgent.analyze_crypto(asset)
     2. NewsAgent.analyze_news(news_query)
     3. RiskAgent.analyze_risk(market_data)
     4. PortfolioAgent.generate_recommendation(market_data, risk_data, news_data)
+
+For a "general financial news" request (run_intent with GENERAL_FINANCIAL_NEWS):
+    1. NewsAgent.analyze_news(news_query) only.
+       StockAgent, CryptoAgent, RiskAgent, and PortfolioAgent are NOT called.
 
 The orchestrator NEVER calls Alpha Vantage, CoinGecko, or NewsData directly.
 All external work is delegated to the agents.
@@ -42,6 +46,12 @@ class Orchestrator:
 
     # Supported asset types accepted by the run() method
     _SUPPORTED_ASSET_TYPES = {"stock", "crypto"}
+
+    # Intent constants — must match QueryInterpreter intent values exactly
+    INTENT_STOCK = "STOCK_ANALYSIS"
+    INTENT_CRYPTO = "CRYPTO_ANALYSIS"
+    INTENT_NEWS = "GENERAL_FINANCIAL_NEWS"
+    INTENT_UNSUPPORTED = "UNSUPPORTED"
 
     def __init__(
         self,
@@ -96,6 +106,213 @@ class Orchestrator:
             return self.stock_agent.analyze_stock(asset)
         else:
             return self.crypto_agent.analyze_crypto(asset)
+
+    # -----------------------------------------------------------------------
+    # Intent-based dynamic routing method (Day 20)
+    # -----------------------------------------------------------------------
+
+    def run_intent(self, interpreted: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Dynamically route a pre-interpreted query to the appropriate agent pipeline
+        based on the intent produced by QueryInterpreter.
+
+        Intent routing rules
+        --------------------
+        STOCK_ANALYSIS       → StockAgent → NewsAgent → RiskAgent → PortfolioAgent
+        CRYPTO_ANALYSIS      → CryptoAgent → NewsAgent → RiskAgent → PortfolioAgent
+        GENERAL_FINANCIAL_NEWS → NewsAgent only (no market, risk, or portfolio agents)
+        UNSUPPORTED / other  → Clean structured error, no agents called
+
+        :param interpreted: Dict returned by QueryInterpreter.interpret(), which must
+                            contain at least: intent, success, asset_type, asset,
+                            news_query.
+        :return: Structured response dict including ``agents_used`` list.
+        """
+        if not isinstance(interpreted, dict):
+            return {
+                "success": False,
+                "agent": "Orchestrator",
+                "intent": self.INTENT_UNSUPPORTED,
+                "agents_used": [],
+                "error": "run_intent() requires a dict produced by QueryInterpreter.",
+            }
+
+        intent = interpreted.get("intent", self.INTENT_UNSUPPORTED)
+
+        # --- GENERAL_FINANCIAL_NEWS: NewsAgent only -------------------------
+        if intent == self.INTENT_NEWS:
+            news_query = interpreted.get("news_query") or "finance"
+            try:
+                news_data = self.news_agent.analyze_news(query=news_query)
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": ["NewsAgent"],
+                    "error": f"News agent raised an unexpected error: {exc}",
+                }
+
+            return {
+                "success": news_data.get("success", False),
+                "agent": "Orchestrator",
+                "intent": intent,
+                "agents_used": ["NewsAgent"],
+                "news_data": news_data,
+                "summary": news_data.get("summary", ""),
+                "disclaimer": (
+                    "This is a software-generated financial news summary, not financial advice."
+                ),
+                **(
+                    {"error": news_data.get("error", "NewsAgent returned a failure response.")}
+                    if not news_data.get("success")
+                    else {}
+                ),
+            }
+
+        # --- STOCK_ANALYSIS / CRYPTO_ANALYSIS: full 4-agent pipeline --------
+        if intent in (self.INTENT_STOCK, self.INTENT_CRYPTO):
+            asset_type = interpreted.get("asset_type", "")
+            asset = interpreted.get("asset", "")
+            news_query = interpreted.get("news_query") or "finance"
+            agents_used = []
+
+            # Step 1: Market agent
+            try:
+                market_data = self._run_market_agent(asset_type, asset)
+                agents_used.append("StockAgent" if asset_type == "stock" else "CryptoAgent")
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": agents_used,
+                    "error": f"Market agent raised an unexpected error: {exc}",
+                }
+
+            if not market_data.get("success"):
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": agents_used,
+                    "step": "market_agent",
+                    "error": market_data.get("error", "Market agent returned a failure response."),
+                    "market_data": market_data,
+                }
+
+            # Step 2: News agent
+            try:
+                news_data = self.news_agent.analyze_news(query=news_query)
+                agents_used.append("NewsAgent")
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": agents_used,
+                    "error": f"News agent raised an unexpected error: {exc}",
+                }
+
+            if not news_data.get("success"):
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": agents_used,
+                    "step": "news_agent",
+                    "error": news_data.get("error", "News agent returned a failure response."),
+                    "market_data": market_data,
+                    "news_data": news_data,
+                }
+
+            # Step 3: Risk agent
+            try:
+                risk_data = self.risk_agent.analyze_risk(market_data)
+                agents_used.append("RiskAgent")
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": agents_used,
+                    "error": f"Risk agent raised an unexpected error: {exc}",
+                }
+
+            if not risk_data.get("success"):
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": agents_used,
+                    "step": "risk_agent",
+                    "error": risk_data.get("error", "Risk agent returned a failure response."),
+                    "market_data": market_data,
+                    "news_data": news_data,
+                    "risk_data": risk_data,
+                }
+
+            # Step 4: Portfolio agent
+            try:
+                recommendation = self.portfolio_agent.generate_recommendation(
+                    market_data=market_data,
+                    risk_data=risk_data,
+                    news_data=news_data,
+                )
+                agents_used.append("PortfolioAgent")
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": agents_used,
+                    "error": f"Portfolio agent raised an unexpected error: {exc}",
+                }
+
+            if not recommendation.get("success"):
+                return {
+                    "success": False,
+                    "agent": "Orchestrator",
+                    "intent": intent,
+                    "agents_used": agents_used,
+                    "step": "portfolio_agent",
+                    "error": recommendation.get("error", "Portfolio agent returned a failure response."),
+                    "market_data": market_data,
+                    "news_data": news_data,
+                    "risk_data": risk_data,
+                    "recommendation": recommendation,
+                }
+
+            # Build successful full-pipeline response
+            return {
+                "success": True,
+                "agent": "Orchestrator",
+                "intent": intent,
+                "agents_used": agents_used,
+                "asset": asset,
+                "asset_type": asset_type,
+                "market_data": market_data,
+                "news_data": news_data,
+                "risk_data": risk_data,
+                "recommendation": recommendation,
+                "summary": recommendation.get("summary", ""),
+                "disclaimer": recommendation.get(
+                    "disclaimer",
+                    "This is a software-generated educational recommendation, not financial advice.",
+                ),
+            }
+
+        # --- UNSUPPORTED / UNKNOWN -------------------------------------------
+        return {
+            "success": False,
+            "agent": "Orchestrator",
+            "intent": intent,
+            "agents_used": [],
+            "error": interpreted.get(
+                "error",
+                "Unsupported or unrecognised intent. No financial agents were executed.",
+            ),
+        }
 
     # -----------------------------------------------------------------------
     # Main orchestration method

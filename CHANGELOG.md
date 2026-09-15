@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.20.0] - 2026-09-15 (Day 20: Dynamic Agent Routing)
+
+### Added
+- Added `Orchestrator.run_intent(interpreted)` — a new public method that accepts the pre-interpreted dict from `QueryInterpreter` and dynamically selects which agents to execute based on intent.
+- Added intent constants to `Orchestrator` (`INTENT_STOCK`, `INTENT_CRYPTO`, `INTENT_NEWS`, `INTENT_UNSUPPORTED`) matching `QueryInterpreter` exactly.
+- Routing rules inside `run_intent()`:
+  - `STOCK_ANALYSIS` → StockAgent → NewsAgent → RiskAgent → PortfolioAgent
+  - `CRYPTO_ANALYSIS` → CryptoAgent → NewsAgent → RiskAgent → PortfolioAgent
+  - `GENERAL_FINANCIAL_NEWS` → NewsAgent only (no market, risk, or portfolio agents called)
+  - `UNSUPPORTED` / unknown → clean structured error, no agents executed
+- All `run_intent()` responses include `"agents_used"` list naming each agent that was actually executed.
+- Refactored `POST /api/query` in `backend/routes.py` to delegate all routing to `orchestrator.run_intent()` (single routing authority). Route response now includes top-level `agents_used` field.
+- DB persistence in `POST /api/query` is now explicitly restricted to `STOCK_ANALYSIS` and `CRYPTO_ANALYSIS` intents only; `GENERAL_FINANCIAL_NEWS` responses are never persisted.
+- Existing `run()` method is completely unchanged — `POST /api/analyze` is unaffected.
+- Added 11 comprehensive `run_intent()` unit tests to `tests/test_agents.py` covering all intents, partial pipeline failures, `agents_used` increments, invalid input, and a contract test verifying Orchestrator/QueryInterpreter constants match.
+- Updated `tests/test_api.py` to mock `orchestrator.run_intent()` and assert `agents_used` in API responses.
+
+---
+
 ## [0.19.0] - 2026-09-15 (Day 19: Query Intent Routing)
 
 ### Added

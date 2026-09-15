@@ -192,9 +192,11 @@ def test_analyze_orchestrator_application_failure():
 def test_query_endpoint_valid_stock():
     """Test POST /api/query with a valid stock natural language query and verify persistence."""
     mock_orchestrator = MagicMock()
-    mock_orchestrator.run.return_value = {
+    mock_orchestrator.run_intent.return_value = {
         "success": True,
         "agent": "Orchestrator",
+        "intent": "STOCK_ANALYSIS",
+        "agents_used": ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"],
         "asset": "AAPL",
         "asset_type": "stock",
         "market_data": {"market_direction": "bullish"},
@@ -219,8 +221,11 @@ def test_query_endpoint_valid_stock():
         assert data["success"] is True
         assert data["query"] == "Should I invest in Apple?"
         assert data["interpreted"]["asset"] == "AAPL"
+        assert data["interpreted"]["intent"] == "STOCK_ANALYSIS"
+        assert data["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
         assert data["saved_analysis_id"] == 42
 
+        mock_orchestrator.run_intent.assert_called_once()
         mock_repo.save_analysis.assert_called_once_with(
             query="Should I invest in Apple?",
             asset_type="stock",
@@ -241,9 +246,11 @@ def test_query_endpoint_valid_stock():
 def test_query_endpoint_orchestrator_failure_does_not_persist():
     """Test that failed Orchestrator analysis is NOT saved to the database."""
     mock_orchestrator = MagicMock()
-    mock_orchestrator.run.return_value = {
+    mock_orchestrator.run_intent.return_value = {
         "success": False,
         "agent": "Orchestrator",
+        "intent": "STOCK_ANALYSIS",
+        "agents_used": ["StockAgent"],
         "step": "market_agent",
         "error": "Upstream API timeout"
     }
@@ -269,9 +276,11 @@ def test_query_endpoint_orchestrator_failure_does_not_persist():
 def test_query_endpoint_db_failure_does_not_break_analysis():
     """Test that a database saving failure does not crash the financial analysis response."""
     mock_orchestrator = MagicMock()
-    mock_orchestrator.run.return_value = {
+    mock_orchestrator.run_intent.return_value = {
         "success": True,
         "agent": "Orchestrator",
+        "intent": "STOCK_ANALYSIS",
+        "agents_used": ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"],
         "asset": "AAPL",
         "asset_type": "stock",
         "recommendation": {"recommendation": "buy"}
@@ -295,15 +304,23 @@ def test_query_endpoint_db_failure_does_not_break_analysis():
 
 
 def test_query_endpoint_general_financial_news():
-    """Test POST /api/query with a general financial news query routes to NewsAgent without DB persistence."""
+    """Test POST /api/query with a general financial news query routes via run_intent without DB persistence."""
     mock_orchestrator = MagicMock()
-    mock_orchestrator.news_agent.analyze_news.return_value = {
+    mock_orchestrator.run_intent.return_value = {
         "success": True,
-        "agent": "NewsAgent",
-        "query": "finance",
-        "overall_sentiment": "neutral",
+        "agent": "Orchestrator",
+        "intent": "GENERAL_FINANCIAL_NEWS",
+        "agents_used": ["NewsAgent"],
+        "news_data": {
+            "success": True,
+            "agent": "NewsAgent",
+            "query": "finance",
+            "overall_sentiment": "neutral",
+            "summary": "Markets are mixed today.",
+            "articles": []
+        },
         "summary": "Markets are mixed today.",
-        "articles": []
+        "disclaimer": "This is a software-generated financial news summary, not financial advice."
     }
 
     app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
@@ -318,20 +335,23 @@ def test_query_endpoint_general_financial_news():
         assert data["interpreted"]["intent"] == "GENERAL_FINANCIAL_NEWS"
         assert data["interpreted"]["asset"] is None
         assert data["interpreted"]["asset_type"] is None
+        assert data["agents_used"] == ["NewsAgent"]
         assert data["saved_analysis_id"] is None
-        # Orchestrator.run should NOT be called; only news_agent.analyze_news
+        # Orchestrator.run_intent() is called; not orchestrator.run()
+        mock_orchestrator.run_intent.assert_called_once()
         mock_orchestrator.run.assert_not_called()
-        mock_orchestrator.news_agent.analyze_news.assert_called_once()
     finally:
         app.dependency_overrides.clear()
 
 
-def test_query_endpoint_stock_response_includes_intent():
-    """Test POST /api/query with a stock query includes 'intent' field in the interpreted response."""
+def test_query_endpoint_stock_response_includes_intent_and_agents_used():
+    """Test POST /api/query stock query includes intent field and agents_used in response."""
     mock_orchestrator = MagicMock()
-    mock_orchestrator.run.return_value = {
+    mock_orchestrator.run_intent.return_value = {
         "success": True,
         "agent": "Orchestrator",
+        "intent": "STOCK_ANALYSIS",
+        "agents_used": ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"],
         "asset": "TSLA",
         "asset_type": "stock",
         "market_data": {"market_direction": "bearish"},
@@ -356,6 +376,7 @@ def test_query_endpoint_stock_response_includes_intent():
         assert data["success"] is True
         assert data["interpreted"]["intent"] == "STOCK_ANALYSIS"
         assert data["interpreted"]["asset"] == "TSLA"
+        assert data["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
         assert data["saved_analysis_id"] == 7
     finally:
         app.dependency_overrides.clear()

@@ -1,4 +1,4 @@
-﻿"""
+"""
 API Router for Financial Intelligence Endpoints
 
 Defines backend routes for asset analysis, query interpretation, history persistence,
@@ -74,13 +74,21 @@ def analyze_query(
     repository: AnalysisRepository = Depends(get_repository)
 ) -> Dict[str, Any]:
     """
-    Analyze a financial query by interpreting user intent and routing to the Orchestrator or News Agent.
+    Analyze a financial query by interpreting user intent and dynamically routing
+    to the appropriate agent pipeline via Orchestrator.run_intent().
+
+    Routing is fully delegated to the Orchestrator:
+    - STOCK_ANALYSIS       → StockAgent + NewsAgent + RiskAgent + PortfolioAgent
+    - CRYPTO_ANALYSIS      → CryptoAgent + NewsAgent + RiskAgent + PortfolioAgent
+    - GENERAL_FINANCIAL_NEWS → NewsAgent only (no DB persistence)
+    - UNSUPPORTED          → Clean structured error, no agents called
 
     :param request: Validated request containing a natural language query string.
     :param interpreter: Injected QueryInterpreter instance.
     :param orchestrator: Injected Orchestrator instance.
     :param repository: Injected AnalysisRepository instance.
-    :return: Standardized dictionary containing interpreted request, analysis result, and saved ID.
+    :return: Standardized dictionary containing interpreted request, analysis result,
+             agents_used list, and saved ID.
     """
     interpreted_res = interpreter.interpret(request.query)
 
@@ -88,42 +96,23 @@ def analyze_query(
         return {
             "success": False,
             "query": request.query,
-            "error": interpreted_res.get("error", "Unable to identify a supported financial asset from the query.")
+            "intent": interpreted_res.get("intent", "UNSUPPORTED"),
+            "agents_used": [],
+            "error": interpreted_res.get("error", "Unable to identify a supported financial asset from the query."),
         }
 
-    # Route General Financial News queries directly to News Agent
-    if interpreted_res.get("intent") == QueryInterpreter.INTENT_NEWS:
-        news_res = orchestrator.news_agent.analyze_news(query=interpreted_res.get("news_query", "finance"))
-        return {
-            "success": True,
-            "query": request.query,
-            "interpreted": {
-                "intent": interpreted_res["intent"],
-                "asset_type": None,
-                "asset": None,
-                "news_query": interpreted_res["news_query"]
-            },
-            "analysis": {
-                "success": news_res.get("success", True),
-                "agent": "NewsAgent",
-                "summary": news_res.get("summary", ""),
-                "news_data": news_res,
-                "disclaimer": "This is a software-generated financial news summary, not financial advice."
-            },
-            "saved_analysis_id": None
-        }
-
-    # Route Stock / Crypto queries to Orchestrator workflow
-    analysis_res = orchestrator.run(
-        asset_type=interpreted_res["asset_type"],
-        asset=interpreted_res["asset"],
-        news_query=interpreted_res["news_query"]
-    )
+    # Delegate all routing logic to Orchestrator.run_intent()
+    analysis_res = orchestrator.run_intent(interpreted_res)
 
     saved_analysis_id = None
 
-    # Persist in database only if the orchestrator analysis completed successfully
-    if isinstance(analysis_res, dict) and analysis_res.get("success"):
+    # Persist to DB only for successful stock/crypto full-pipeline analyses
+    intent = interpreted_res.get("intent")
+    if (
+        isinstance(analysis_res, dict)
+        and analysis_res.get("success")
+        and intent in (QueryInterpreter.INTENT_STOCK, QueryInterpreter.INTENT_CRYPTO)
+    ):
         recommendation_data = analysis_res.get("recommendation", {})
         risk_data = analysis_res.get("risk_data", {})
         market_data = analysis_res.get("market_data", {})
@@ -150,13 +139,14 @@ def analyze_query(
         "success": True,
         "query": request.query,
         "interpreted": {
-            "intent": interpreted_res.get("intent", "STOCK_ANALYSIS"),
-            "asset_type": interpreted_res["asset_type"],
-            "asset": interpreted_res["asset"],
-            "news_query": interpreted_res["news_query"]
+            "intent": interpreted_res.get("intent"),
+            "asset_type": interpreted_res.get("asset_type"),
+            "asset": interpreted_res.get("asset"),
+            "news_query": interpreted_res.get("news_query"),
         },
+        "agents_used": analysis_res.get("agents_used", []),
         "analysis": analysis_res,
-        "saved_analysis_id": saved_analysis_id
+        "saved_analysis_id": saved_analysis_id,
     }
 
 

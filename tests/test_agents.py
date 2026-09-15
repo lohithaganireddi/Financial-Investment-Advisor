@@ -1257,3 +1257,326 @@ def test_orchestrator_market_agent_exception_handled():
     assert result["success"] is False
     assert result["agent"] == "Orchestrator"
     assert "Unexpected crash" in result["error"]
+
+
+# ==========================================
+# Orchestrator.run_intent() — Day 20 Dynamic Routing Tests
+# ==========================================
+
+def _make_orchestrator_for_intent(
+    stock_result=None,
+    crypto_result=None,
+    news_result=None,
+    risk_result=None,
+    portfolio_result=None,
+):
+    """
+    Build an Orchestrator with all agents mocked.
+    Returns (orchestrator, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio).
+    """
+    mock_stock     = MagicMock()
+    mock_crypto    = MagicMock()
+    mock_news      = MagicMock()
+    mock_risk      = MagicMock()
+    mock_portfolio = MagicMock()
+
+    if stock_result is not None:
+        mock_stock.analyze_stock.return_value = stock_result
+    if crypto_result is not None:
+        mock_crypto.analyze_crypto.return_value = crypto_result
+    if news_result is not None:
+        mock_news.analyze_news.return_value = news_result
+    if risk_result is not None:
+        mock_risk.analyze_risk.return_value = risk_result
+    if portfolio_result is not None:
+        mock_portfolio.generate_recommendation.return_value = portfolio_result
+
+    orch = Orchestrator(
+        stock_agent=mock_stock,
+        crypto_agent=mock_crypto,
+        news_agent=mock_news,
+        risk_agent=mock_risk,
+        portfolio_agent=mock_portfolio,
+    )
+    return orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio
+
+
+def test_run_intent_stock_analysis_all_four_agents_called():
+    """
+    STOCK_ANALYSIS intent must call StockAgent, NewsAgent, RiskAgent, PortfolioAgent.
+    agents_used must contain exactly those four agents in order.
+    """
+    orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(100, "buy", "high"),
+    )
+
+    interpreted = {
+        "success": True,
+        "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock",
+        "asset": "AAPL",
+        "news_query": "Apple",
+    }
+
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is True
+    assert result["intent"] == "STOCK_ANALYSIS"
+    assert result["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+    assert "market_data" in result
+    assert "news_data" in result
+    assert "risk_data" in result
+    assert "recommendation" in result
+    assert result["asset"] == "AAPL"
+    assert result["asset_type"] == "stock"
+
+    mock_stock.analyze_stock.assert_called_once_with("AAPL")
+    mock_news.analyze_news.assert_called_once_with(query="Apple")
+    mock_risk.analyze_risk.assert_called_once()
+    mock_portfolio.generate_recommendation.assert_called_once()
+    mock_crypto.analyze_crypto.assert_not_called()
+
+
+def test_run_intent_crypto_analysis_all_four_agents_called():
+    """
+    CRYPTO_ANALYSIS intent must call CryptoAgent, NewsAgent, RiskAgent, PortfolioAgent.
+    StockAgent must NOT be called.
+    """
+    crypto_risk = {
+        "success": True, "agent": "RiskAgent",
+        "asset": "bitcoin", "asset_type": "crypto",
+        "risk_score": 75, "risk_level": "high",
+    }
+    crypto_rec = {
+        "success": True, "agent": "PortfolioAgent",
+        "asset": "bitcoin", "asset_type": "crypto",
+        "recommendation_score": 65, "recommendation": "hold",
+        "confidence": "medium", "market_direction": "bullish",
+        "risk_level": "high", "news_sentiment": "positive",
+        "factors": [], "summary": "hold bitcoin", "disclaimer": "Not advice.",
+    }
+
+    orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        crypto_result=_make_crypto_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=crypto_risk,
+        portfolio_result=crypto_rec,
+    )
+
+    interpreted = {
+        "success": True,
+        "intent": "CRYPTO_ANALYSIS",
+        "asset_type": "crypto",
+        "asset": "bitcoin",
+        "news_query": "Bitcoin",
+    }
+
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is True
+    assert result["intent"] == "CRYPTO_ANALYSIS"
+    assert result["agents_used"] == ["CryptoAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+    assert result["asset"] == "bitcoin"
+    assert result["asset_type"] == "crypto"
+
+    mock_crypto.analyze_crypto.assert_called_once_with("bitcoin")
+    mock_news.analyze_news.assert_called_once_with(query="Bitcoin")
+    mock_risk.analyze_risk.assert_called_once()
+    mock_portfolio.generate_recommendation.assert_called_once()
+    mock_stock.analyze_stock.assert_not_called()
+
+
+def test_run_intent_general_financial_news_only_news_agent_called():
+    """
+    GENERAL_FINANCIAL_NEWS must call NewsAgent ONLY.
+    StockAgent, CryptoAgent, RiskAgent, PortfolioAgent must NOT be called.
+    agents_used must contain only NewsAgent.
+    """
+    orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        news_result={
+            "success": True,
+            "agent": "NewsAgent",
+            "query": "finance",
+            "total_results": 5,
+            "overall_sentiment": "neutral",
+            "summary": "Mixed signals in the market today.",
+            "articles": [],
+        }
+    )
+
+    interpreted = {
+        "success": True,
+        "intent": "GENERAL_FINANCIAL_NEWS",
+        "asset_type": None,
+        "asset": None,
+        "news_query": "finance",
+    }
+
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is True
+    assert result["intent"] == "GENERAL_FINANCIAL_NEWS"
+    assert result["agents_used"] == ["NewsAgent"]
+    assert "news_data" in result
+    assert "disclaimer" in result
+
+    mock_news.analyze_news.assert_called_once_with(query="finance")
+    mock_stock.analyze_stock.assert_not_called()
+    mock_crypto.analyze_crypto.assert_not_called()
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_run_intent_unsupported_returns_clean_error_no_agents_called():
+    """
+    UNSUPPORTED intent must return a clean structured error.
+    No financial agents must be called. agents_used must be an empty list.
+    """
+    orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent()
+
+    interpreted = {
+        "success": False,
+        "intent": "UNSUPPORTED",
+        "error": "Unable to identify a supported asset.",
+    }
+
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is False
+    assert result["intent"] == "UNSUPPORTED"
+    assert result["agents_used"] == []
+    assert "error" in result
+
+    mock_stock.analyze_stock.assert_not_called()
+    mock_crypto.analyze_crypto.assert_not_called()
+    mock_news.analyze_news.assert_not_called()
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_run_intent_unknown_intent_no_agents_called():
+    """An unknown intent string must return a clean error; no agents called."""
+    orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent()
+
+    result = orch.run_intent({"intent": "FUTURES_TRADING", "success": True})
+
+    assert result["success"] is False
+    assert result["agents_used"] == []
+    assert "error" in result
+    mock_stock.analyze_stock.assert_not_called()
+    mock_crypto.analyze_crypto.assert_not_called()
+    mock_news.analyze_news.assert_not_called()
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_run_intent_invalid_non_dict_input():
+    """Passing a non-dict to run_intent returns a clean error with agents_used=[]."""
+    orch, *_ = _make_orchestrator_for_intent()
+    for bad in [None, "string", 42, ["list"]]:
+        result = orch.run_intent(bad)
+        assert result["success"] is False
+        assert result["agents_used"] == []
+        assert "error" in result
+
+
+def test_run_intent_stock_response_has_all_standard_keys():
+    """Full STOCK_ANALYSIS response includes all keys expected downstream by routes.py."""
+    orch, *_ = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(100, "buy", "high"),
+    )
+    interpreted = {
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    }
+
+    result = orch.run_intent(interpreted)
+
+    for key in ("success", "agent", "intent", "agents_used", "asset", "asset_type",
+                "market_data", "news_data", "risk_data", "recommendation", "summary", "disclaimer"):
+        assert key in result, f"Missing key in run_intent stock response: {key}"
+    assert result["recommendation"]["recommendation"] == "buy"
+
+
+def test_run_intent_general_news_failed_news_agent():
+    """A failing NewsAgent for GENERAL_FINANCIAL_NEWS propagates error; agents_used=['NewsAgent']."""
+    orch, _, _, mock_news, *_ = _make_orchestrator_for_intent(
+        news_result={"success": False, "agent": "NewsAgent", "error": "API key missing"}
+    )
+    interpreted = {
+        "success": True, "intent": "GENERAL_FINANCIAL_NEWS",
+        "asset_type": None, "asset": None, "news_query": "finance",
+    }
+
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is False
+    assert result["agents_used"] == ["NewsAgent"]
+    assert "API key missing" in result["error"]
+    mock_news.analyze_news.assert_called_once_with(query="finance")
+
+
+def test_run_intent_stock_failed_market_agent_stops_pipeline():
+    """
+    StockAgent failure in STOCK_ANALYSIS: agents_used=[StockAgent].
+    NewsAgent, RiskAgent, PortfolioAgent are NOT called.
+    """
+    orch, mock_stock, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result={"success": False, "agent": "StockAgent", "error": "API rate limit exceeded"}
+    )
+    interpreted = {
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    }
+
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is False
+    assert result["agents_used"] == ["StockAgent"]
+    assert result["step"] == "market_agent"
+    assert "API rate limit exceeded" in result["error"]
+    mock_news.analyze_news.assert_not_called()
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_run_intent_stock_news_failure_partial_agents_used():
+    """
+    NewsAgent failure in STOCK_ANALYSIS: agents_used=[StockAgent, NewsAgent].
+    RiskAgent and PortfolioAgent are NOT called.
+    """
+    orch, _, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result={"success": False, "agent": "NewsAgent", "error": "No articles found"},
+    )
+    interpreted = {
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    }
+
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is False
+    assert result["agents_used"] == ["StockAgent", "NewsAgent"]
+    assert result["step"] == "news_agent"
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_run_intent_intent_constants_match_query_interpreter():
+    """
+    Orchestrator intent constants must exactly match QueryInterpreter intent values.
+    This test guards the routing contract so any future mismatch fails loudly.
+    """
+    from services.query_interpreter import QueryInterpreter
+
+    assert Orchestrator.INTENT_STOCK       == QueryInterpreter.INTENT_STOCK
+    assert Orchestrator.INTENT_CRYPTO      == QueryInterpreter.INTENT_CRYPTO
+    assert Orchestrator.INTENT_NEWS        == QueryInterpreter.INTENT_NEWS
+    assert Orchestrator.INTENT_UNSUPPORTED == QueryInterpreter.INTENT_UNSUPPORTED
