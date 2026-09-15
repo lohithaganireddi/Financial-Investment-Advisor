@@ -66,6 +66,8 @@
 - [x] Design stock & crypto search interface (`AnalysisForm.jsx`).
 - [x] Build agent interaction feed & summary display (`ResultCard.jsx` and `HistoryList.jsx`).
 - [x] Build Agent Activity Dashboard (`AgentDashboard.jsx`) with summary metrics, vertical execution timeline, telemetry table, and tab navigation.
+- [x] Enhance Agent Activity Dashboard with analysis context banners, friendly display names, and horizontal pipeline flow summary bars.
+
 - [ ] Integrate interactive charts for price action & risk distribution.
 - [ ] Build portfolio input & recommendation dashboard.
 

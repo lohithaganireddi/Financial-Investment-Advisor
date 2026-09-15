@@ -72,10 +72,13 @@ FinSight 2.0 uses **deterministic intent-based routing**. When you send a natura
 This architecture keeps routing logic in one place (the Orchestrator), tracking real-time execution status for the frontend Agent Activity Dashboard (`AgentDashboard.jsx`).
 
 The **Agent Activity Dashboard** visualizes:
+- **Analysis Context Banner**: Displays active asset identifier, analysis type, user prompt query, recommendation badge, and risk level.
+- **Executed Pipeline Flow**: Dynamic horizontal flow bar (`Agent A → Agent B → Agent C → Agent D`) with human-friendly display names (`Stock Price Agent`, `Crypto Agent`, `Financial News Agent`, `Risk Analysis Agent`, `Portfolio Recommendation Agent`).
 - **Summary Metrics**: Total Agents Executed, Successful, Failed, and Pipeline Status.
 - **Vertical Execution Timeline**: Step-by-step sequence (`#1` → `#2` → `#3` → `#4`) with status markers and agent icons.
 - **Agent Telemetry Table**: Agent names, status badges, sequence numbers, and execution summaries.
 - **Tab Navigation**: Seamless toggling between **Financial Intelligence Dashboard** and **Agent Activity Dashboard**.
+
 
 
 

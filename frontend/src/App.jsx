@@ -147,6 +147,16 @@ export default function App() {
 
   const agentActivity = result?.agent_activity || result?.analysis?.agent_activity || [];
 
+  const analysisContext = result ? {
+    query: result.query,
+    asset: result.asset || result.analysis?.asset || result.interpreted?.asset,
+    asset_type: result.asset_type || result.analysis?.asset_type || result.interpreted?.asset_type,
+    intent: result.intent || result.interpreted?.intent || result.analysis?.intent,
+    recommendation: result.recommendation?.recommendation || result.analysis?.recommendation?.recommendation,
+    risk_level: result.risk_data?.risk_level || result.analysis?.risk_data?.risk_level,
+    saved_id: result.saved_analysis_id,
+  } : null;
+
   return (
     <div className="container">
       <Header />
@@ -212,7 +222,7 @@ export default function App() {
 
       {/* Agent Activity Dashboard Tab */}
       {activeTab === 'agent' && (
-        <AgentDashboard agentActivity={agentActivity} />
+        <AgentDashboard agentActivity={agentActivity} context={analysisContext} />
       )}
     </div>
   );

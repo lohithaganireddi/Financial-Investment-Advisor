@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent implementations for Stock, Crypto, News, Risk, and Portfolio analysis.
 - Backend API routes and database setup.
 - Frontend UI dashboard development.
+## [0.24.0] - 2026-09-15 (Day 24: Improve Agent Activity Dashboard with Analysis Context)
+
+### Added
+- Updated `AgentDashboard.jsx` to receive analysis context props (`query`, `asset`, `asset_type`, `intent`, `recommendation`, `risk_level`, `saved_id`).
+- Added a top Context Banner displaying the active asset identifier, analysis type, user query prompt, recommendation badge, and risk level.
+- Added friendly human-readable display names for all agents (`Stock Price Agent`, `Crypto Agent`, `Financial News Agent`, `Risk Analysis Agent`, `Portfolio Recommendation Agent`) while preserving raw backend system IDs (`StockAgent`, etc.).
+- Built a dynamic horizontal **Executed Pipeline Flow** summary bar showing step-by-step agent sequence (`Agent A → Agent B → Agent C → Agent D`).
+- Updated `App.jsx` to construct `analysisContext` from `result` state and pass it into `<AgentDashboard />`.
+- Ensured news-only analyses (`GENERAL_FINANCIAL_NEWS`) display only the `Financial News Agent` across flow, metrics, timeline, and telemetry table.
+- Verified build with `npm run build` (0 errors) and Python test suite (`pytest`, 112 tests passing).
+
+---
+
 ## [0.23.0] - 2026-09-15 (Day 23: Persist Agent Activity in Analysis History)
 
 ### Added

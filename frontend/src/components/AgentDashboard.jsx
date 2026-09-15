@@ -10,10 +10,21 @@ import {
   XCircle,
   Activity,
   Layers,
-  Cpu
+  Cpu,
+  ArrowRight,
+  Search,
+  Award
 } from 'lucide-react';
 
-export default function AgentDashboard({ agentActivity = [] }) {
+const FRIENDLY_NAMES = {
+  StockAgent: 'Stock Price Agent',
+  CryptoAgent: 'Crypto Agent',
+  NewsAgent: 'Financial News Agent',
+  RiskAgent: 'Risk Analysis Agent',
+  PortfolioAgent: 'Portfolio Recommendation Agent'
+};
+
+export default function AgentDashboard({ agentActivity = [], context = null }) {
   const totalAgents = agentActivity.length;
   const successfulAgents = agentActivity.filter(a => a.status === 'success').length;
   const failedAgents = agentActivity.filter(a => a.status !== 'success').length;
@@ -50,6 +61,8 @@ export default function AgentDashboard({ agentActivity = [] }) {
     }
   };
 
+  const getFriendlyName = (name) => FRIENDLY_NAMES[name] || name;
+
   if (!agentActivity || agentActivity.length === 0) {
     return (
       <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem' }}>
@@ -66,23 +79,82 @@ export default function AgentDashboard({ agentActivity = [] }) {
     );
   }
 
+  // Derive context titles
+  const assetLabel = context?.asset ? context.asset.toUpperCase() : null;
+  const assetType = context?.asset_type ? context.asset_type.toUpperCase() : null;
+  const intent = context?.intent || null;
+  const queryText = context?.query || null;
+  const rec = context?.recommendation ? context.recommendation.toUpperCase() : null;
+  const riskLevel = context?.risk_level ? context.risk_level.toUpperCase() : null;
+
+  let subtitleText = 'Execution pipeline telemetry log';
+  if (assetLabel && assetType) {
+    subtitleText = `Execution pipeline for ${assetLabel} (${assetType}) analysis`;
+  } else if (intent === 'GENERAL_FINANCIAL_NEWS') {
+    subtitleText = 'Execution pipeline for General Financial News Analysis';
+  } else if (queryText) {
+    subtitleText = `Execution pipeline for query: "${queryText}"`;
+  }
+
   return (
     <div className="agent-dashboard-container">
-      {/* Top Header Summary */}
-      <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2 className="card-title" style={{ fontSize: '1.4rem', margin: 0 }}>
-            <Activity size={24} color="var(--accent-blue)" />
-            Agent Execution Activity Dashboard
-          </h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Real-time execution sequence and agent telemetry
-          </p>
+      {/* Top Header Summary with Analysis Context */}
+      <div className="card" style={{ marginBottom: '1.5rem', padding: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h2 className="card-title" style={{ fontSize: '1.4rem', margin: 0 }}>
+              <Activity size={24} color="var(--accent-blue)" />
+              Agent Execution Activity
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--accent-blue)', fontWeight: 600, marginTop: '0.3rem' }}>
+              {subtitleText}
+            </p>
+            {queryText && (
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                Query Prompt: "{queryText}"
+              </p>
+            )}
+          </div>
+
+          {/* Context Badges */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {assetLabel && <span className="badge badge-conf">{assetLabel}</span>}
+            {assetType && <span className="badge badge-conf">{assetType}</span>}
+            {rec && (
+              <span className={`badge ${rec === 'BUY' ? 'badge-buy' : rec === 'AVOID' ? 'badge-avoid' : 'badge-hold'}`}>
+                REC: {rec}
+              </span>
+            )}
+            {riskLevel && <span className="badge badge-conf">RISK: {riskLevel}</span>}
+            {context?.saved_id && <span className="badge badge-conf">Saved ID #{context.saved_id}</span>}
+          </div>
+        </div>
+
+        {/* Dynamic Horizontal Pipeline Summary Flow */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '1.1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <strong style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '0.75rem' }}>
+            Executed Pipeline Flow
+          </strong>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {agentActivity.map((item, idx) => (
+              <React.Fragment key={idx}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(11, 15, 25, 0.7)', padding: '0.45rem 0.8rem', borderRadius: '8px', border: `1px solid ${item.status === 'success' ? 'var(--border-color)' : 'rgba(239, 68, 68, 0.4)'}` }}>
+                  {getAgentIcon(item.agent)}
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    {getFriendlyName(item.agent)}
+                  </span>
+                </div>
+                {idx < agentActivity.length - 1 && (
+                  <ArrowRight size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Summary Cards Grid */}
-      <div className="metrics-grid" style={{ marginBottom: '2rem' }}>
+      <div className="metrics-grid" style={{ marginBottom: '1.75rem' }}>
         <div className="metric-card">
           <div className="metric-label">Total Executed</div>
           <div className="metric-value">{totalAgents}</div>
@@ -179,6 +251,9 @@ export default function AgentDashboard({ agentActivity = [] }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                       {getAgentIcon(item.agent)}
                       <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                        {getFriendlyName(item.agent)}
+                      </span>
+                      <span className="badge badge-conf" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}>
                         {item.agent}
                       </span>
                       <span className="badge badge-conf" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}>
@@ -212,8 +287,9 @@ export default function AgentDashboard({ agentActivity = [] }) {
             <thead>
               <tr>
                 <th>Order</th>
-                <th>Agent Name</th>
-                <th>Execution Status</th>
+                <th>Friendly Name</th>
+                <th>System Agent ID</th>
+                <th>Status</th>
                 <th>Execution Summary</th>
               </tr>
             </thead>
@@ -226,8 +302,11 @@ export default function AgentDashboard({ agentActivity = [] }) {
                   <td style={{ fontWeight: 700 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       {getAgentIcon(item.agent)}
-                      {item.agent}
+                      {getFriendlyName(item.agent)}
                     </div>
+                  </td>
+                  <td>
+                    <span className="badge badge-conf">{item.agent}</span>
                   </td>
                   <td>
                     <span className={`badge ${item.status === 'success' ? 'badge-buy' : 'badge-avoid'}`}>
