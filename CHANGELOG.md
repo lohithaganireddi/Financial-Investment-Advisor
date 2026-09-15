@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2026-09-15 (Day 9: Risk Analysis Agent Module)
+
+### Added
+- Created `agents/risk_agent.py` implementing `RiskAgent` with a deterministic scoring formula for market risk classification.
+- `RiskAgent.analyze_risk(data)` accepts structured output from `StockAgent` or `CryptoAgent` and returns a risk score (0–100), risk level ("low"/"medium"/"high"), and a full `score_breakdown` dict.
+- Scoring rules: base score (Stock=30, Crypto=50) + movement adjustment (≤2%→+0, >2–5%→+15, >5%→+30) + direction adjustment (bullish→+0, neutral→+10, bearish→+20) + crypto bonus (+10), capped at 100.
+- Safe percentage parsing supporting both float values and string format (e.g., `"1.3736%"`).
+- Full input validation: rejects non-dict, empty dict, failed upstream, unsupported agent, missing asset identifier, missing or unparseable percentage field.
+- Exported `RiskAgent` from `agents/__init__.py`.
+- Updated `tests/test_agents.py` with 10 new mock unit tests for `RiskAgent` (48 total unit tests passing across project).
+- Updated `TODO.md` tracking Phase 3 progress.
+
+---
+
 ## [0.8.0] - 2026-09-15 (Day 8: Financial News Agent Module)
 
 ### Added

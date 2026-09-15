@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for AI Agent Modules
 
 Verifies StockAgent, CryptoAgent, and NewsAgent input validation, service integration, market trend evaluation,
@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from agents.stock_agent import StockAgent
 from agents.crypto_agent import CryptoAgent
 from agents.news_agent import NewsAgent
+from agents.risk_agent import RiskAgent
 
 
 # ==========================================
@@ -461,3 +462,190 @@ def test_news_agent_dependency_injection():
 
     agent = NewsAgent(service=mock_service)
     assert agent.service == mock_service
+
+
+# ==========================================
+# RiskAgent Unit Tests
+# ==========================================
+
+def test_risk_agent_invalid_input_type():
+    """Test that non-dict input returns a validation error."""
+    agent = RiskAgent()
+
+    for bad_input in ["string", 42, None, ["list"], 3.14]:
+        result = agent.analyze_risk(bad_input)
+        assert result["success"] is False
+        assert result["agent"] == "RiskAgent"
+        assert "dictionary" in result["error"]
+
+
+def test_risk_agent_empty_data():
+    """Test that an empty dict returns a validation error."""
+    agent = RiskAgent()
+    result = agent.analyze_risk({})
+    assert result["success"] is False
+    assert result["agent"] == "RiskAgent"
+    assert "empty" in result["error"].lower()
+
+
+def test_risk_agent_failed_upstream_agent():
+    """Test that a failed upstream agent result (success=False) is rejected."""
+    agent = RiskAgent()
+    result = agent.analyze_risk({
+        "success": False,
+        "agent": "StockAgent",
+        "symbol": "AAPL",
+        "error": "API key missing"
+    })
+    assert result["success"] is False
+    assert result["agent"] == "RiskAgent"
+    assert "failure" in result["error"].lower()
+
+
+def test_risk_agent_unsupported_agent():
+    """Test that an unsupported upstream agent name returns a validation error."""
+    agent = RiskAgent()
+    result = agent.analyze_risk({
+        "success": True,
+        "agent": "WeatherAgent",
+        "symbol": "AAPL",
+        "change_percent": 1.5,
+        "market_direction": "bullish"
+    })
+    assert result["success"] is False
+    assert result["agent"] == "RiskAgent"
+    assert "Unsupported" in result["error"] or "unsupported" in result["error"].lower()
+
+
+def test_risk_agent_stock_low_risk():
+    """
+    Test StockAgent input that should produce a low risk score.
+    Stock base=30, movement <=2% -> +0, bullish -> +0, no crypto bonus.
+    Expected score: 30 -> "low"
+    """
+    agent = RiskAgent()
+    result = agent.analyze_risk({
+        "success": True,
+        "agent": "StockAgent",
+        "symbol": "AAPL",
+        "change_percent": 1.5,      # |1.5| <= 2 -> +0
+        "market_direction": "bullish"  # -> +0
+    })
+    assert result["success"] is True
+    assert result["agent"] == "RiskAgent"
+    assert result["asset"] == "AAPL"
+    assert result["asset_type"] == "stock"
+    assert result["risk_score"] == 30
+    assert result["risk_level"] == "low"
+    assert result["score_breakdown"]["base_score"] == 30
+    assert result["score_breakdown"]["movement_adjustment"] == 0
+    assert result["score_breakdown"]["direction_adjustment"] == 0
+    assert result["score_breakdown"]["crypto_bonus"] == 0
+
+
+def test_risk_agent_stock_medium_risk():
+    """
+    Test StockAgent input that should produce a medium risk score.
+    Stock base=30, movement 3.5% (>2 and <=5) -> +15, neutral -> +10, no crypto bonus.
+    Expected score: 30 + 15 + 10 = 55 -> "medium"
+    """
+    agent = RiskAgent()
+    result = agent.analyze_risk({
+        "success": True,
+        "agent": "StockAgent",
+        "symbol": "MSFT",
+        "change_percent": 3.5,       # |3.5| > 2 and <= 5 -> +15
+        "market_direction": "neutral"  # -> +10
+    })
+    assert result["success"] is True
+    assert result["risk_score"] == 55
+    assert result["risk_level"] == "medium"
+    assert result["score_breakdown"]["base_score"] == 30
+    assert result["score_breakdown"]["movement_adjustment"] == 15
+    assert result["score_breakdown"]["direction_adjustment"] == 10
+
+
+def test_risk_agent_stock_high_risk():
+    """
+    Test StockAgent input that should produce a high risk score.
+    Stock base=30, movement 7% (>5) -> +30, bearish -> +20, no crypto bonus.
+    Expected score: 30 + 30 + 20 = 80 -> "high"
+    """
+    agent = RiskAgent()
+    result = agent.analyze_risk({
+        "success": True,
+        "agent": "StockAgent",
+        "symbol": "GME",
+        "change_percent": 7.0,       # |7.0| > 5 -> +30
+        "market_direction": "bearish"  # -> +20
+    })
+    assert result["success"] is True
+    assert result["risk_score"] == 80
+    assert result["risk_level"] == "high"
+    assert result["score_breakdown"]["base_score"] == 30
+    assert result["score_breakdown"]["movement_adjustment"] == 30
+    assert result["score_breakdown"]["direction_adjustment"] == 20
+    assert result["score_breakdown"]["crypto_bonus"] == 0
+
+
+def test_risk_agent_crypto_medium_or_high_risk():
+    """
+    Test CryptoAgent input producing a high risk score.
+    Crypto base=50, movement 3% (>2 and <=5) -> +15, bullish -> +0, crypto bonus +10.
+    Expected score: 50 + 15 + 0 + 10 = 75 -> "high"
+    """
+    agent = RiskAgent()
+    result = agent.analyze_risk({
+        "success": True,
+        "agent": "CryptoAgent",
+        "coin_id": "bitcoin",
+        "change_percent_24h": 3.0,      # |3.0| > 2 and <= 5 -> +15
+        "market_direction": "bullish"    # -> +0
+    })
+    assert result["success"] is True
+    assert result["asset"] == "bitcoin"
+    assert result["asset_type"] == "crypto"
+    assert result["risk_score"] == 75
+    assert result["risk_level"] == "high"
+    assert result["score_breakdown"]["base_score"] == 50
+    assert result["score_breakdown"]["movement_adjustment"] == 15
+    assert result["score_breakdown"]["direction_adjustment"] == 0
+    assert result["score_breakdown"]["crypto_bonus"] == 10
+
+
+def test_risk_agent_bearish_market_increases_risk():
+    """
+    Test that a bearish market direction increases risk compared to bullish.
+    Crypto base=50, movement <=2% -> +0, bearish -> +20, crypto bonus +10.
+    Expected score: 50 + 0 + 20 + 10 = 80 -> "high"
+    """
+    agent = RiskAgent()
+    result = agent.analyze_risk({
+        "success": True,
+        "agent": "CryptoAgent",
+        "coin_id": "ethereum",
+        "change_percent_24h": -1.5,     # |1.5| <= 2 -> +0
+        "market_direction": "bearish"    # -> +20
+    })
+    assert result["success"] is True
+    assert result["risk_score"] == 80
+    assert result["risk_level"] == "high"
+    assert result["market_direction"] == "bearish"
+    assert result["score_breakdown"]["direction_adjustment"] == 20
+    assert result["score_breakdown"]["crypto_bonus"] == 10
+
+
+def test_risk_agent_invalid_percentage():
+    """Test that a non-parseable percentage string returns a validation error."""
+    agent = RiskAgent()
+    result = agent.analyze_risk({
+        "success": True,
+        "agent": "StockAgent",
+        "symbol": "AAPL",
+        "change_percent": "not-a-number",
+        "market_direction": "neutral"
+    })
+    assert result["success"] is False
+    assert result["agent"] == "RiskAgent"
+    assert "parse" in result["error"].lower() or "Cannot" in result["error"]
+
