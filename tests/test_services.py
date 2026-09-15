@@ -1,7 +1,7 @@
 """
 Unit tests for External Data Services
 
-Verifies AlphaVantageService and CoinGeckoService handling of responses, errors, rate limits, and missing API keys using mocks.
+Verifies AlphaVantageService, CoinGeckoService, and NewsDataService handling of responses, errors, rate limits, and missing API keys using mocks.
 Tests do NOT make live network requests or require real API keys.
 """
 
@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 from services.alpha_vantage import AlphaVantageService
 from services.coingecko import CoinGeckoService
+from services.newsdata import NewsDataService
 
 
 # ==========================================
@@ -208,3 +209,107 @@ def test_coingecko_network_error(mock_get):
 
     assert result["success"] is False
     assert "Network error connecting to CoinGecko" in result["error"]
+
+
+# ==========================================
+# NewsData Service Unit Tests
+# ==========================================
+
+def test_newsdata_missing_api_key():
+    """Test that missing or placeholder NewsData API key returns an error without network calls."""
+    service = NewsDataService(api_key="your_newsdata_api_key_here")
+    result = service.get_financial_news("finance")
+
+    assert result["success"] is False
+    assert "Missing or unconfigured NewsData API key" in result["error"]
+
+
+def test_newsdata_empty_query():
+    """Test that empty search query returns an error."""
+    service = NewsDataService(api_key="valid_test_key")
+    result = service.get_financial_news("")
+
+    assert result["success"] is False
+    assert "Invalid search query" in result["error"]
+
+
+@patch("httpx.Client.get")
+def test_newsdata_successful_news_fetch(mock_get):
+    """Test parsing of a successful NewsData.io news articles response."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {
+        "status": "success",
+        "totalResults": 1,
+        "results": [
+            {
+                "article_id": "art_123",
+                "title": "Stock Markets Reach All-Time Highs",
+                "link": "https://news.example.com/article123",
+                "description": "Financial markets saw strong gains today following positive economic reports...",
+                "pubDate": "2026-09-15 10:00:00",
+                "source_id": "financial_times"
+            }
+        ]
+    }
+    mock_get.return_value = mock_response
+
+    service = NewsDataService(api_key="valid_test_key")
+    result = service.get_financial_news("finance")
+
+    assert result["success"] is True
+    assert result["total_results"] == 1
+    articles = result["data"]
+    assert len(articles) == 1
+    assert articles[0]["article_id"] == "art_123"
+    assert articles[0]["title"] == "Stock Markets Reach All-Time Highs"
+    assert articles[0]["source"] == "financial_times"
+
+
+@patch("httpx.Client.get")
+def test_newsdata_rate_limit_429(mock_get):
+    """Test handling of NewsData HTTP 429 rate limit error."""
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_get.return_value = mock_response
+
+    service = NewsDataService(api_key="valid_test_key")
+    result = service.get_financial_news("finance")
+
+    assert result["success"] is False
+    assert "Rate Limit Exceeded (HTTP 429)" in result["error"]
+
+
+@patch("httpx.Client.get")
+def test_newsdata_api_error_response(mock_get):
+    """Test handling of NewsData API payload error response."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {
+        "status": "error",
+        "results": {
+            "message": "Invalid API Key",
+            "code": "Unauthorized"
+        }
+    }
+    mock_get.return_value = mock_response
+
+    service = NewsDataService(api_key="valid_test_key")
+    result = service.get_financial_news("finance")
+
+    assert result["success"] is False
+    assert "NewsData API Error: Invalid API Key" in result["error"]
+
+
+@patch("httpx.Client.get")
+def test_newsdata_network_error(mock_get):
+    """Test handling of network connection failure."""
+    mock_get.side_effect = httpx.RequestError("Connection timeout")
+
+    service = NewsDataService(api_key="valid_test_key")
+    result = service.get_financial_news("finance")
+
+    assert result["success"] is False
+    assert "Network error connecting to NewsData" in result["error"]

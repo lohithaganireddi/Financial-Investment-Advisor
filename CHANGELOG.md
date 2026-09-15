@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-09-15 (Day 5: NewsData Financial News Service Layer)
+
+### Added
+- Created `services/newsdata.py` client wrapper for NewsData.io financial news API.
+- Implemented secure API key reading from `.env` (`NEWSDATA_API_KEY`) and default parameters (`query="finance"`, `category="business"`, `language="en"`).
+- Implemented error handling for missing/placeholder API keys, empty queries, HTTP 429 rate limits, API payload error statuses, and network failures.
+- Updated `tests/test_services.py` with 6 new mock unit tests for `NewsDataService` (18 total tests passing).
+- Updated `TODO.md` completing Phase 2 external services layer.
+
+---
+
 ## [0.4.0] - 2026-09-15 (Day 4: CoinGecko Crypto Data Service Layer)
 
 ### Added
