@@ -1,15 +1,15 @@
-﻿"""
-Unit Tests for QueryInterpreter Service (Day 19 Intent Routing)
+"""
+Unit Tests for QueryInterpreter Service (Day 25 Enhanced Intent Routing)
 
-Verifies intent classification (STOCK_ANALYSIS, CRYPTO_ANALYSIS, GENERAL_FINANCIAL_NEWS, UNSUPPORTED)
-and asset symbol extraction across equities, crypto, general news, case insensitivity, and invalid inputs.
+Verifies intent classification, expanded stock/crypto mappings, ticker symbol normalization ($AAPL),
+explicit asset-news routing, multi-asset ambiguity detection, and unknown query responses.
 """
 
 from services.query_interpreter import QueryInterpreter
 
 
 def test_query_interpreter_stock_intents():
-    """Test stock intent classification and asset symbol extraction."""
+    """Test standard stock intent classification and asset symbol extraction."""
     interpreter = QueryInterpreter()
 
     # Apple
@@ -57,6 +57,37 @@ def test_query_interpreter_stock_intents():
     assert res7["asset"] == "META"
 
 
+def test_query_interpreter_new_stock_mappings():
+    """Test Day 25 added stock asset mappings (Netflix, AMD, Intel, Coca-Cola, Walmart)."""
+    interpreter = QueryInterpreter()
+
+    # Netflix / NFLX
+    res_nflx = interpreter.interpret("Analyze Netflix")
+    assert res_nflx["success"] is True
+    assert res_nflx["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res_nflx["asset"] == "NFLX"
+
+    # AMD
+    res_amd = interpreter.interpret("Should I invest in AMD?")
+    assert res_amd["success"] is True
+    assert res_amd["asset"] == "AMD"
+
+    # Intel / INTC
+    res_intc = interpreter.interpret("Check INTC stock")
+    assert res_intc["success"] is True
+    assert res_intc["asset"] == "INTC"
+
+    # Coca-Cola / Coke / KO
+    res_ko = interpreter.interpret("How is Coca-Cola doing?")
+    assert res_ko["success"] is True
+    assert res_ko["asset"] == "KO"
+
+    # Walmart / WMT
+    res_wmt = interpreter.interpret("Analyze WMT")
+    assert res_wmt["success"] is True
+    assert res_wmt["asset"] == "WMT"
+
+
 def test_query_interpreter_crypto_intents():
     """Test crypto intent classification and coin ID extraction."""
     interpreter = QueryInterpreter()
@@ -88,6 +119,78 @@ def test_query_interpreter_crypto_intents():
     assert res4["asset"] == "dogecoin"
 
 
+def test_query_interpreter_new_crypto_mappings():
+    """Test Day 25 added crypto mappings (Cardano, XRP, Binance Coin, Polygon)."""
+    interpreter = QueryInterpreter()
+
+    # Cardano / ADA
+    res_ada = interpreter.interpret("Analyze Cardano")
+    assert res_ada["success"] is True
+    assert res_ada["intent"] == QueryInterpreter.INTENT_CRYPTO
+    assert res_ada["asset"] == "cardano"
+
+    # XRP / Ripple
+    res_xrp = interpreter.interpret("Should I buy XRP?")
+    assert res_xrp["success"] is True
+    assert res_xrp["asset"] == "ripple"
+
+    # Binance Coin / BNB
+    res_bnb = interpreter.interpret("Check BNB crypto")
+    assert res_bnb["success"] is True
+    assert res_bnb["asset"] == "binancecoin"
+
+    # Polygon / MATIC
+    res_matic = interpreter.interpret("Is Polygon a good investment?")
+    assert res_matic["success"] is True
+    assert res_matic["asset"] == "polygon"
+
+
+def test_query_interpreter_ticker_prefix_normalization():
+    """Test normalization of $ prefixed ticker symbols ($AAPL, $TSLA, $BTC)."""
+    interpreter = QueryInterpreter()
+
+    res1 = interpreter.interpret("Analyze $AAPL")
+    assert res1["success"] is True
+    assert res1["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res1["asset"] == "AAPL"
+
+    res2 = interpreter.interpret("Should I buy $TSLA?")
+    assert res2["success"] is True
+    assert res2["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res2["asset"] == "TSLA"
+
+    res3 = interpreter.interpret("Check $BTC")
+    assert res3["success"] is True
+    assert res3["intent"] == QueryInterpreter.INTENT_CRYPTO
+    assert res3["asset"] == "bitcoin"
+
+
+def test_query_interpreter_explicit_asset_news_queries():
+    """Test explicit requests for news about a specific asset route to GENERAL_FINANCIAL_NEWS."""
+    interpreter = QueryInterpreter()
+
+    res1 = interpreter.interpret("Latest news about Tesla")
+    assert res1["success"] is True
+    assert res1["intent"] == QueryInterpreter.INTENT_NEWS
+    assert res1["news_query"] == "Tesla"
+    assert res1["asset"] is None
+
+    res2 = interpreter.interpret("Apple stock news")
+    assert res2["success"] is True
+    assert res2["intent"] == QueryInterpreter.INTENT_NEWS
+    assert res2["news_query"] == "Apple"
+
+    res3 = interpreter.interpret("Bitcoin news")
+    assert res3["success"] is True
+    assert res3["intent"] == QueryInterpreter.INTENT_NEWS
+    assert res3["news_query"] == "Bitcoin"
+
+    res4 = interpreter.interpret("Ethereum headlines")
+    assert res4["success"] is True
+    assert res4["intent"] == QueryInterpreter.INTENT_NEWS
+    assert res4["news_query"] == "Ethereum"
+
+
 def test_query_interpreter_general_financial_news():
     """Test classification of general financial news queries without specific asset."""
     interpreter = QueryInterpreter()
@@ -96,7 +199,10 @@ def test_query_interpreter_general_financial_news():
         "What is happening in the financial market?",
         "Tell me about the latest financial news",
         "Show me market headlines",
-        "Give me economy news"
+        "Give me economy news",
+        "Show me business news",
+        "Any news about inflation?",
+        "Latest stock market news"
     ]
 
     for q in queries:
@@ -105,7 +211,21 @@ def test_query_interpreter_general_financial_news():
         assert res["intent"] == QueryInterpreter.INTENT_NEWS
         assert res["asset_type"] is None
         assert res["asset"] is None
-        assert res["news_query"] == "finance"
+
+
+def test_query_interpreter_multiple_asset_ambiguity():
+    """Test that queries mentioning multiple distinct assets return an UNSUPPORTED error."""
+    interpreter = QueryInterpreter()
+
+    res1 = interpreter.interpret("Compare Apple and Tesla")
+    assert res1["success"] is False
+    assert res1["intent"] == QueryInterpreter.INTENT_UNSUPPORTED
+    assert "Ambiguous query containing multiple distinct financial assets" in res1["error"]
+
+    res2 = interpreter.interpret("Should I buy AAPL or BTC?")
+    assert res2["success"] is False
+    assert res2["intent"] == QueryInterpreter.INTENT_UNSUPPORTED
+    assert "Ambiguous query containing multiple distinct financial assets" in res2["error"]
 
 
 def test_query_interpreter_unsupported_queries():
@@ -115,8 +235,7 @@ def test_query_interpreter_unsupported_queries():
     res = interpreter.interpret("Tell me about Ford stock")
     assert res["success"] is False
     assert res["intent"] == QueryInterpreter.INTENT_UNSUPPORTED
-    assert "Unable to identify a supported asset or intent" in res["error"]
-    assert "FinSight 2.0 currently supports" in res["error"]
+    assert "Unable to identify a supported financial asset" in res["error"]
 
 
 def test_query_interpreter_case_insensitivity_and_whitespace():

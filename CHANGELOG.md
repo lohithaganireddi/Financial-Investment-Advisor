@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent implementations for Stock, Crypto, News, Risk, and Portfolio analysis.
 - Backend API routes and database setup.
 - Frontend UI dashboard development.
+
+## [0.25.0] - 2026-09-15 (Day 25: Strengthen Natural-Language Query Interpretation)
+
+### Added
+- Expanded stock symbol and keyword mappings in `QueryInterpreter` to support Netflix (`NFLX`), AMD (`AMD`), Intel (`INTC`), Coca-Cola (`KO`), and Walmart (`WMT`), alongside existing equities (`AAPL`, `MSFT`, `TSLA`, `NVDA`, `AMZN`, `GOOGL`, `META`).
+- Expanded crypto asset mappings to support Cardano (`cardano`), XRP/Ripple (`ripple`), Binance Coin (`binancecoin`), and Polygon (`polygon`), alongside existing crypto assets (`bitcoin`, `ethereum`, `solana`, `dogecoin`).
+- Implemented ticker prefix normalization (`$AAPL` -> `AAPL`, `$BTC` -> `bitcoin`) and text punctuation stripping.
+- Added boundary-aware regex keyword matching (`\b...\b`) on normalized lowercased query text to prevent substring false positives.
+- Implemented explicit asset-specific news query routing (`GENERAL_FINANCIAL_NEWS` with `news_query: <AssetName>`) when explicit news keywords (`news`, `headline`, `headlines`, `article`, `articles`) are present in asset queries.
+- Added multi-asset ambiguity detection returning `UNSUPPORTED` with a clear message asking the user to analyze one asset at a time when multiple distinct assets are detected.
+- Expanded `tests/test_query_interpreter.py` with comprehensive test coverage for ticker normalization, expanded assets, asset news routing, and multi-asset ambiguity.
+
 ## [0.24.0] - 2026-09-15 (Day 24: Improve Agent Activity Dashboard with Analysis Context)
 
 ### Added

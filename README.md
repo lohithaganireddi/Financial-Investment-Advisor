@@ -58,7 +58,12 @@ The backend provides a FastAPI service with local SQLite persistence (`smartfina
 
 FinSight 2.0 uses **deterministic intent-based routing**. When you send a natural language query, the system:
 
-1. **QueryInterpreter** classifies the query into an intent.
+1. **QueryInterpreter** classifies the query into an intent:
+   - **Expanded Equities**: AAPL, MSFT, TSLA, NVDA, AMZN, GOOGL, META, NFLX, AMD, INTC, KO, WMT.
+   - **Expanded Crypto**: Bitcoin, Ethereum, Solana, Dogecoin, Cardano, XRP/Ripple, Binance Coin, Polygon.
+   - **Smart Normalization & Boundary Matching**: Handles `$AAPL`, punctuation, and exact word boundaries (`\b...\b`).
+   - **Explicit News Routing**: Queries matching an asset with explicit news intent (e.g. `"Apple stock news"`) route directly to `GENERAL_FINANCIAL_NEWS` with `news_query`.
+   - **Ambiguity Guard**: Queries mentioning multiple distinct assets (e.g. `"Compare Apple and Tesla"`) return `UNSUPPORTED` with a helpful message.
 2. **Orchestrator.run_intent()** selects and executes the correct agent pipeline.
 3. Every response includes an **`agents_used`** list and a structured **`agent_activity`** array recording step-by-step execution details (`agent`, `status`, `order`, `summary`).
 

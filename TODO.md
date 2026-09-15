@@ -52,6 +52,7 @@
 - [x] Implement dynamic agent routing via `Orchestrator.run_intent()` — each intent selects a different agent pipeline; all responses include `agents_used` list.
 - [x] Implement structured agent activity tracking (`agent_activity` field in Orchestrator and `POST /api/query`).
 - [x] Persist `agent_activity` in SQLite database history and update history retrieval endpoints (`GET /api/history` and `GET /api/history/{id}`).
+- [x] Strengthen natural-language query interpretation (`services/query_interpreter.py`) with expanded equities/crypto assets, ticker prefix normalization (`$`), boundary-aware regex matching, asset-news routing, and multi-asset ambiguity detection.
 
 - [ ] Implement user authentication (JWT tokens / passwords).
 - [x] Write backend endpoint tests in `tests/test_api.py`.

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Query Interpreter Module
 
 This module implements the QueryInterpreter, which parses natural-language financial queries,
@@ -39,6 +39,18 @@ class QueryInterpreter:
         "googl": ("GOOGL", "Google"),
         "goog": ("GOOGL", "Google"),
         "meta": ("META", "Meta"),
+        "facebook": ("META", "Meta"),
+        "netflix": ("NFLX", "Netflix"),
+        "nflx": ("NFLX", "Netflix"),
+        "amd": ("AMD", "AMD"),
+        "intel": ("INTC", "Intel"),
+        "intc": ("INTC", "Intel"),
+        "coca-cola": ("KO", "Coca-Cola"),
+        "cocacola": ("KO", "Coca-Cola"),
+        "coke": ("KO", "Coca-Cola"),
+        "ko": ("KO", "Coca-Cola"),
+        "walmart": ("WMT", "Walmart"),
+        "wmt": ("WMT", "Walmart"),
     }
 
     # Supported Cryptocurrencies Mapping: keyword/alias -> (coin_id, news_query_name)
@@ -51,12 +63,26 @@ class QueryInterpreter:
         "sol": ("solana", "Solana"),
         "dogecoin": ("dogecoin", "Dogecoin"),
         "doge": ("dogecoin", "Dogecoin"),
+        "cardano": ("cardano", "Cardano"),
+        "ada": ("cardano", "Cardano"),
+        "xrp": ("ripple", "XRP"),
+        "ripple": ("ripple", "Ripple"),
+        "binance coin": ("binancecoin", "Binance Coin"),
+        "binancecoin": ("binancecoin", "Binance Coin"),
+        "bnb": ("binancecoin", "Binance Coin"),
+        "polygon": ("polygon", "Polygon"),
+        "matic": ("polygon", "Polygon"),
     }
 
-    # Keywords that indicate general financial news queries (when no specific asset is present)
-    _NEWS_KEYWORDS = {
+    # Explicit keywords indicating a request for news articles/headlines rather than full analysis
+    _EXPLICIT_NEWS_KEYWORDS = {
+        "news", "headline", "headlines", "article", "articles"
+    }
+
+    # General keywords that indicate general financial news queries (when no specific asset is present)
+    _GENERAL_NEWS_KEYWORDS = {
         "news", "headline", "headlines", "market", "markets", "financial",
-        "finance", "economy", "economic", "stocks", "crypto"
+        "finance", "economy", "economic", "stocks", "crypto", "business", "inflation"
     }
 
     def interpret(self, query: Any) -> Dict[str, Any]:
@@ -82,75 +108,101 @@ class QueryInterpreter:
                 "error": "Query cannot be empty or whitespace only."
             }
 
-        # Extract word tokens in lowercase
-        words = re.findall(r"\b[a-zA-Z0-9]+\b", cleaned_query.lower())
+        # Normalize query: replace $TICKER with TICKER, lowercase, collapse whitespace
+        normalized = re.sub(r"\$([a-zA-Z0-9]+)", r"\1", cleaned_query).lower()
+        normalized = re.sub(r"\s+", " ", normalized)
 
-        matched_stock = None
-        matched_crypto = None
+        # Match stocks and cryptos using boundary-aware regex to prevent substring false-positives
+        matched_stocks = {}  # symbol -> (symbol, news_name)
+        for keyword, data in self._STOCK_MAP.items():
+            pattern = r"\b" + re.escape(keyword) + r"\b"
+            if re.search(pattern, normalized):
+                matched_stocks[data[0]] = data
 
-        # Check for stock keyword matches
-        for word in words:
-            if word in self._STOCK_MAP:
-                matched_stock = self._STOCK_MAP[word]
-                break
+        matched_cryptos = {}  # coin_id -> (coin_id, news_name)
+        for keyword, data in self._CRYPTO_MAP.items():
+            pattern = r"\b" + re.escape(keyword) + r"\b"
+            if re.search(pattern, normalized):
+                matched_cryptos[data[0]] = data
 
-        # Check for crypto keyword matches
-        for word in words:
-            if word in self._CRYPTO_MAP:
-                matched_crypto = self._CRYPTO_MAP[word]
-                break
+        all_matched_assets = list(matched_stocks.values()) + list(matched_cryptos.values())
 
-        # Handle ambiguous query containing conflicting stock & crypto assets
-        if matched_stock and matched_crypto:
+        # Ambiguity check: multiple distinct assets found in query
+        if len(all_matched_assets) > 1:
+            names = [item[1] for item in all_matched_assets]
+            names_str = ", ".join(f"'{n}'" for n in names)
             return {
                 "success": False,
                 "intent": self.INTENT_UNSUPPORTED,
-                "error": "Ambiguous query containing multiple distinct asset types."
-            }
-
-        # Handle Stock Analysis intent
-        if matched_stock:
-            symbol, news_name = matched_stock
-            return {
-                "success": True,
-                "intent": self.INTENT_STOCK,
-                "asset_type": "stock",
-                "asset": symbol,
-                "news_query": news_name,
+                "error": f"Ambiguous query containing multiple distinct financial assets ({names_str}). Please analyze one asset at a time.",
                 "original_query": cleaned_query
             }
 
-        # Handle Crypto Analysis intent
-        if matched_crypto:
-            coin_id, news_name = matched_crypto
-            return {
-                "success": True,
-                "intent": self.INTENT_CRYPTO,
-                "asset_type": "crypto",
-                "asset": coin_id,
-                "news_query": news_name,
-                "original_query": cleaned_query
-            }
+        # Explicit news indicator check
+        has_explicit_news = any(
+            re.search(r"\b" + re.escape(nk) + r"\b", normalized) for nk in self._EXPLICIT_NEWS_KEYWORDS
+        )
 
-        # Handle General Financial News intent (when news/market keywords are present)
-        for word in words:
-            if word in self._NEWS_KEYWORDS:
+        # Single matched asset found
+        if len(all_matched_assets) == 1:
+            asset_id, news_name = all_matched_assets[0]
+            is_stock = all_matched_assets[0] in matched_stocks.values()
+
+            # If the user explicitly asked for news about this asset (e.g. "Apple stock news", "Latest news about Tesla")
+            if has_explicit_news:
+                return {
+                    "success": True,
+                    "intent": self.INTENT_NEWS,
+                    "asset_type": None,
+                    "asset": None,
+                    "news_query": news_name,
+                    "confidence": "high",
+                    "original_query": cleaned_query
+                }
+
+            if is_stock:
+                return {
+                    "success": True,
+                    "intent": self.INTENT_STOCK,
+                    "asset_type": "stock",
+                    "asset": asset_id,
+                    "news_query": news_name,
+                    "confidence": "high",
+                    "original_query": cleaned_query
+                }
+            else:
+                return {
+                    "success": True,
+                    "intent": self.INTENT_CRYPTO,
+                    "asset_type": "crypto",
+                    "asset": asset_id,
+                    "news_query": news_name,
+                    "confidence": "high",
+                    "original_query": cleaned_query
+                }
+
+        # General financial news check (when no specific asset is matched)
+        tokens = set(re.findall(r"\b[a-zA-Z0-9\-]+\b", normalized))
+        for token in tokens:
+            if token in self._GENERAL_NEWS_KEYWORDS:
                 return {
                     "success": True,
                     "intent": self.INTENT_NEWS,
                     "asset_type": None,
                     "asset": None,
                     "news_query": "finance",
+                    "confidence": "high",
                     "original_query": cleaned_query
                 }
 
-        # Handle Unsupported / Unknown Query
+        # Unsupported / Unknown Query
         return {
             "success": False,
             "intent": self.INTENT_UNSUPPORTED,
             "error": (
-                "Unable to identify a supported asset or intent from the query. "
-                "FinSight 2.0 currently supports stock analysis (Apple, Microsoft, Tesla, Nvidia, Amazon, Google, Meta), "
-                "crypto analysis (Bitcoin, Ethereum, Solana, Dogecoin), and general financial news."
-            )
+                "Unable to identify a supported financial asset or intent from the query. "
+                "FinSight 2.0 currently supports stock analysis, crypto analysis, and general financial news."
+            ),
+            "original_query": cleaned_query
         }
+
