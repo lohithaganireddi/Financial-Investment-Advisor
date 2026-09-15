@@ -63,8 +63,10 @@
 - [x] Scaffold frontend project in `frontend/`.
 - [x] Design stock & crypto search interface (`AnalysisForm.jsx`).
 - [x] Build agent interaction feed & summary display (`ResultCard.jsx` and `HistoryList.jsx`).
+- [x] Build Agent Activity Dashboard (`AgentDashboard.jsx`) with summary metrics, vertical execution timeline, telemetry table, and tab navigation.
 - [ ] Integrate interactive charts for price action & risk distribution.
 - [ ] Build portfolio input & recommendation dashboard.
+
 
 ---
 

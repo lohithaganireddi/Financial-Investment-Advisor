@@ -3,8 +3,10 @@ import Header from './components/Header';
 import AnalysisForm from './components/AnalysisForm';
 import ResultCard from './components/ResultCard';
 import HistoryList from './components/HistoryList';
+import AgentDashboard from './components/AgentDashboard';
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('main');
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -142,15 +144,27 @@ export default function App() {
     }
   };
 
+  const agentActivity = result?.agent_activity || result?.analysis?.agent_activity || [];
+
   return (
     <div className="container">
       <Header />
 
-      <AnalysisForm
-        onAnalyze={handleStructuredAnalyze}
-        onQuery={handleQueryAnalyze}
-        loading={loading}
-      />
+      {/* Navigation Tabs */}
+      <div className="tabs" style={{ marginBottom: '1.75rem' }}>
+        <button
+          className={`tab-btn ${activeTab === 'main' ? 'active' : ''}`}
+          onClick={() => setActiveTab('main')}
+        >
+          Financial Intelligence Dashboard
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'agent' ? 'active' : ''}`}
+          onClick={() => setActiveTab('agent')}
+        >
+          Agent Activity Dashboard {agentActivity.length > 0 ? `(${agentActivity.length})` : ''}
+        </button>
+      </div>
 
       {error && (
         <div className="error-box">
@@ -174,15 +188,31 @@ export default function App() {
         </div>
       )}
 
-      {result && !loading && <ResultCard result={result} />}
+      {/* Main Financial Dashboard Tab */}
+      {activeTab === 'main' && (
+        <>
+          <AnalysisForm
+            onAnalyze={handleStructuredAnalyze}
+            onQuery={handleQueryAnalyze}
+            loading={loading}
+          />
 
-      <HistoryList
-        history={history}
-        selectedId={selectedId}
-        onSelectRecord={handleSelectHistoryRecord}
-        onRefresh={fetchHistory}
-        loading={historyLoading}
-      />
+          {result && !loading && <ResultCard result={result} />}
+
+          <HistoryList
+            history={history}
+            selectedId={selectedId}
+            onSelectRecord={handleSelectHistoryRecord}
+            onRefresh={fetchHistory}
+            loading={historyLoading}
+          />
+        </>
+      )}
+
+      {/* Agent Activity Dashboard Tab */}
+      {activeTab === 'agent' && (
+        <AgentDashboard agentActivity={agentActivity} />
+      )}
     </div>
   );
 }

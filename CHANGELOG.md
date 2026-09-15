@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent implementations for Stock, Crypto, News, Risk, and Portfolio analysis.
 - Backend API routes and database setup.
 - Frontend UI dashboard development.
+## [0.22.0] - 2026-09-15 (Day 22: Agent Activity Dashboard)
+
+### Added
+- Created `frontend/src/components/AgentDashboard.jsx` providing a dedicated Agent Activity Dashboard view.
+- Added top Summary Cards grid dynamically calculating `Total Agents Executed`, `Successful`, `Failed`, and `Pipeline Status` (COMPLETED / PARTIAL FAILURE / FAILED / NO ACTIVITY).
+- Built a vertical execution timeline displaying sequential execution steps (`#1`, `#2`, `#3`, `#4`) with visual connecting lines and Lucide icons (`TrendingUp`, `Coins`, `Newspaper`, `ShieldAlert`, `Briefcase`, `Bot`, `CheckCircle2`, `XCircle`).
+- Added an **Agent Details & Telemetry** table displaying agent name, execution order, success/failed status badges, and execution summaries.
+- Created an Empty State ("No agent activity available") displayed when no query has been run or historical records without activity are viewed.
+- Updated `frontend/src/App.jsx` with tab navigation allowing users to toggle between the **Financial Intelligence Dashboard** and the **Agent Activity Dashboard**.
+- Verified build with `npm run build` (0 errors) and Python test suite (`pytest`, 110 tests passing).
+
+---
 
 ## [0.21.0] - 2026-09-15 (Day 21: Agent Activity Tracking)
 

@@ -68,7 +68,14 @@ FinSight 2.0 uses **deterministic intent-based routing**. When you send a natura
 | `GENERAL_FINANCIAL_NEWS` | NewsAgent only | ❌ No |
 | `UNSUPPORTED` | None | ❌ No |
 
-This architecture keeps routing logic in one place (the Orchestrator), tracking real-time execution status for the frontend Agent Activity Dashboard.
+This architecture keeps routing logic in one place (the Orchestrator), tracking real-time execution status for the frontend Agent Activity Dashboard (`AgentDashboard.jsx`).
+
+The **Agent Activity Dashboard** visualizes:
+- **Summary Metrics**: Total Agents Executed, Successful, Failed, and Pipeline Status.
+- **Vertical Execution Timeline**: Step-by-step sequence (`#1` → `#2` → `#3` → `#4`) with status markers and agent icons.
+- **Agent Telemetry Table**: Agent names, status badges, sequence numbers, and execution summaries.
+- **Tab Navigation**: Seamless toggling between **Financial Intelligence Dashboard** and **Agent Activity Dashboard**.
+
 
 
 
