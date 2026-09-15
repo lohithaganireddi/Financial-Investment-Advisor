@@ -4,5 +4,6 @@ Agents package initialization
 
 from agents.stock_agent import StockAgent
 from agents.crypto_agent import CryptoAgent
+from agents.news_agent import NewsAgent
 
-__all__ = ["StockAgent", "CryptoAgent"]
+__all__ = ["StockAgent", "CryptoAgent", "NewsAgent"]

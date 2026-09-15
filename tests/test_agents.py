@@ -1,13 +1,14 @@
-"""
+﻿"""
 Unit tests for AI Agent Modules
 
-Verifies StockAgent and CryptoAgent input validation, service integration, market direction evaluation,
-and percentage parsing using mock services without live network calls.
+Verifies StockAgent, CryptoAgent, and NewsAgent input validation, service integration, market trend evaluation,
+and sentiment analysis using mock services without live network calls.
 """
 
 from unittest.mock import MagicMock
 from agents.stock_agent import StockAgent
 from agents.crypto_agent import CryptoAgent
+from agents.news_agent import NewsAgent
 
 
 # ==========================================
@@ -284,4 +285,179 @@ def test_crypto_agent_dependency_injection():
     mock_service.get_crypto_price.return_value = {"success": False, "error": "Mocked call"}
 
     agent = CryptoAgent(service=mock_service)
+    assert agent.service == mock_service
+
+
+# ==========================================
+# NewsAgent Unit Tests
+# ==========================================
+
+def test_news_agent_invalid_query():
+    """Test that invalid query inputs return an error dictionary."""
+    agent = NewsAgent(service=MagicMock())
+
+    res1 = agent.analyze_news("")
+    assert res1["success"] is False
+    assert "Invalid search query" in res1["error"]
+
+    res2 = agent.analyze_news("   ")
+    assert res2["success"] is False
+    assert "Invalid search query" in res2["error"]
+
+
+def test_news_agent_successful_analysis():
+    """Test NewsAgent evaluation of financial news articles."""
+    mock_service = MagicMock()
+    mock_service.get_financial_news.return_value = {
+        "success": True,
+        "total_results": 1,
+        "data": [
+            {
+                "article_id": "art_100",
+                "title": "Markets Rally Following Strong Growth Reports",
+                "link": "https://news.example.com/art_100",
+                "description": "Stock indices saw high profit gains and record surges today.",
+                "pubDate": "2026-09-15 10:00:00",
+                "source": "financial_times"
+            }
+        ]
+    }
+
+    agent = NewsAgent(service=mock_service)
+    result = agent.analyze_news("finance", "business", "en")
+
+    assert result["success"] is True
+    assert result["agent"] == "NewsAgent"
+    assert result["query"] == "finance"
+    assert result["category"] == "business"
+    assert result["language"] == "en"
+    assert result["total_results"] == 1
+    assert result["overall_sentiment"] == "positive"
+    assert "positive" in result["summary"]
+    articles = result["articles"]
+    assert len(articles) == 1
+    assert articles[0]["article_id"] == "art_100"
+    assert articles[0]["published_at"] == "2026-09-15 10:00:00"
+    assert articles[0]["sentiment"] == "positive"
+    mock_service.get_financial_news.assert_called_once_with(query="finance", category="business", language="en")
+
+
+def test_news_agent_positive_sentiment():
+    """Test NewsAgent positive sentiment scoring across articles."""
+    mock_service = MagicMock()
+    mock_service.get_financial_news.return_value = {
+        "success": True,
+        "total_results": 1,
+        "data": [
+            {
+                "article_id": "art_101",
+                "title": "Tech Stocks Surge With High Record Growth",
+                "link": "https://news.example.com/101",
+                "description": "Bullish rally and strong profit gains across the tech sector.",
+                "pubDate": "2026-09-15 11:00:00",
+                "source": "bloomberg"
+            }
+        ]
+    }
+
+    agent = NewsAgent(service=mock_service)
+    result = agent.analyze_news("stocks")
+
+    assert result["success"] is True
+    assert result["overall_sentiment"] == "positive"
+    assert result["articles"][0]["sentiment"] == "positive"
+
+
+def test_news_agent_negative_sentiment():
+    """Test NewsAgent negative sentiment scoring across articles."""
+    mock_service = MagicMock()
+    mock_service.get_financial_news.return_value = {
+        "success": True,
+        "total_results": 1,
+        "data": [
+            {
+                "article_id": "art_102",
+                "title": "Markets Plunge Amid Recession Warning",
+                "link": "https://news.example.com/102",
+                "description": "Severe crash and steep decline as inflation risk rises.",
+                "pubDate": "2026-09-15 11:30:00",
+                "source": "reuters"
+            }
+        ]
+    }
+
+    agent = NewsAgent(service=mock_service)
+    result = agent.analyze_news("recession")
+
+    assert result["success"] is True
+    assert result["overall_sentiment"] == "negative"
+    assert result["articles"][0]["sentiment"] == "negative"
+
+
+def test_news_agent_neutral_sentiment():
+    """Test NewsAgent neutral sentiment scoring for balanced headlines."""
+    mock_service = MagicMock()
+    mock_service.get_financial_news.return_value = {
+        "success": True,
+        "total_results": 1,
+        "data": [
+            {
+                "article_id": "art_103",
+                "title": "Central Bank Holds Quarterly Monetary Policy Meeting",
+                "link": "https://news.example.com/103",
+                "description": "Officials met today to review current benchmark interest rates.",
+                "pubDate": "2026-09-15 12:00:00",
+                "source": "wsj"
+            }
+        ]
+    }
+
+    agent = NewsAgent(service=mock_service)
+    result = agent.analyze_news("central bank")
+
+    assert result["success"] is True
+    assert result["overall_sentiment"] == "neutral"
+    assert result["articles"][0]["sentiment"] == "neutral"
+
+
+def test_news_agent_empty_news_results():
+    """Test that NewsAgent handles empty article lists gracefully."""
+    mock_service = MagicMock()
+    mock_service.get_financial_news.return_value = {
+        "success": False,
+        "error": "No news articles found for query 'unknown_xyz'."
+    }
+
+    agent = NewsAgent(service=mock_service)
+    result = agent.analyze_news("unknown_xyz")
+
+    assert result["success"] is False
+    assert result["agent"] == "NewsAgent"
+    assert result["query"] == "unknown_xyz"
+    assert "No news articles found" in result["error"]
+
+
+def test_news_agent_unconfigured_service_error():
+    """Test that NewsAgent propagates unconfigured service API key errors cleanly."""
+    mock_service = MagicMock()
+    mock_service.get_financial_news.return_value = {
+        "success": False,
+        "error": "Missing or unconfigured NewsData API key. Please set NEWSDATA_API_KEY in your .env file."
+    }
+
+    agent = NewsAgent(service=mock_service)
+    result = agent.analyze_news("finance")
+
+    assert result["success"] is False
+    assert result["agent"] == "NewsAgent"
+    assert result["query"] == "finance"
+    assert "Missing or unconfigured NewsData API key" in result["error"]
+
+
+def test_news_agent_dependency_injection():
+    """Verify dependency injection works and default service instantiates cleanly."""
+    mock_service = MagicMock()
+    mock_service.get_financial_news.return_value = {"success": False, "error": "Mocked call"}
+
+    agent = NewsAgent(service=mock_service)
     assert agent.service == mock_service

@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.0] - 2026-09-15 (Day 8: Financial News Agent Module)
+
+### Added
+- Created `agents/news_agent.py` implementing `NewsAgent` using dependency injection with `NewsDataService`.
+- Implemented deterministic financial sentiment analysis scoring article titles and descriptions against positive/negative financial lexicons.
+- Mapped `pubDate` to `published_at` in structured article payload for standardized orchestrator consumption.
+- Exported `NewsAgent` from `agents/__init__.py`.
+- Updated `tests/test_agents.py` with 8 new mock unit tests for `NewsAgent` (38 total unit tests passing across project).
+- Updated `TODO.md` tracking Phase 3 progress.
+
+---
+
 ## [0.7.0] - 2026-09-15 (Day 7: Cryptocurrency Agent Module)
 
 ### Added
