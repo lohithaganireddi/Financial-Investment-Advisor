@@ -1,4 +1,4 @@
-﻿"""
+"""
 Database Configuration Module
 
 Configures SQLAlchemy engine, session factory, and base model class.
@@ -7,7 +7,7 @@ Reads DATABASE_URL from environment with a safe local SQLite default.
 
 import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
@@ -42,7 +42,26 @@ def get_db():
 
 def init_db():
     """
-    Initialize database tables defined in models.py if they do not exist.
+    Initialize database tables defined in models.py if they do not exist,
+    and ensure missing columns are added for SQLite backward compatibility.
     """
     from backend import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+
+    if DATABASE_URL.startswith("sqlite"):
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text("PRAGMA table_info(analyses)"))
+                existing_cols = {row[1] for row in result.fetchall()}
+
+                if "recommendation_score" not in existing_cols and "analyses" in [
+                    r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+                ]:
+                    conn.execute(text("ALTER TABLE analyses ADD COLUMN recommendation_score INTEGER"))
+                if "agent_activity" not in existing_cols and "analyses" in [
+                    r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+                ]:
+                    conn.execute(text("ALTER TABLE analyses ADD COLUMN agent_activity TEXT"))
+                conn.commit()
+        except Exception as exc:
+            print(f"init_db migration notice: {exc}")

@@ -48,7 +48,11 @@ export function FinancialProvider({ children }) {
       if (!resp.ok) {
         setError(data.detail || data.error || 'Backend analysis request failed.');
       } else {
-        setResult(data);
+        const normalized = {
+          ...data,
+          intent: data.asset_type === 'stock' ? 'STOCK_ANALYSIS' : 'CRYPTO_ANALYSIS',
+        };
+        setResult(normalized);
       }
     } catch (err) {
       setError(`Backend Service Unavailable: Could not reach FastAPI server at http://127.0.0.1:8000. (${err.message})`);
@@ -71,10 +75,26 @@ export function FinancialProvider({ children }) {
       });
 
       const data = await resp.json();
-      if (!resp.ok) {
+      if (!resp.ok || data.success === false) {
         setError(data.detail || data.error || 'Query interpretation request failed.');
-      } else {
         setResult(data);
+      } else {
+        // Flatten nested analysis structure from POST /api/query
+        const analysisBody = data.analysis || {};
+        const normalized = {
+          ...analysisBody,
+          success: true,
+          query: data.query,
+          intent: data.interpreted?.intent || data.intent,
+          interpreted: data.interpreted,
+          asset: analysisBody.asset || data.interpreted?.asset || data.asset,
+          asset_type: analysisBody.asset_type || data.interpreted?.asset_type || data.asset_type,
+          agents_used: data.agents_used || analysisBody.agents_used || [],
+          agent_activity: data.agent_activity || analysisBody.agent_activity || [],
+          saved_analysis_id: data.saved_analysis_id,
+        };
+
+        setResult(normalized);
         if (data.saved_analysis_id) {
           setSelectedId(data.saved_analysis_id);
           fetchHistory();
@@ -104,7 +124,9 @@ export function FinancialProvider({ children }) {
             query: record.query,
             asset: record.asset,
             asset_type: record.asset_type,
+            intent: record.asset_type === 'stock' ? 'STOCK_ANALYSIS' : 'CRYPTO_ANALYSIS',
             agent_activity: record.agent_activity || [],
+            agents_used: (record.agent_activity || []).map((a) => a.agent),
             summary: `Historical Analysis Record #${record.id} for "${record.query}".`,
             disclaimer: 'Software-generated historical recommendation record retrieved from SQLite database.',
             recommendation: {
@@ -140,15 +162,18 @@ export function FinancialProvider({ children }) {
     }
   };
 
-  const agentActivity = result?.agent_activity || result?.analysis?.agent_activity || [];
+  const agentActivity = result?.agent_activity || [];
 
   const analysisContext = result ? {
-    query: result.query,
-    asset: result.asset || result.analysis?.asset || result.interpreted?.asset,
-    asset_type: result.asset_type || result.analysis?.asset_type || result.interpreted?.asset_type,
-    intent: result.intent || result.interpreted?.intent || result.analysis?.intent,
-    recommendation: result.recommendation?.recommendation || result.analysis?.recommendation?.recommendation,
-    risk_level: result.risk_data?.risk_level || result.analysis?.risk_data?.risk_level,
+    query: result.query || (result.asset ? `Analyze ${result.asset}` : null),
+    asset: result.asset || result.market_data?.symbol,
+    asset_type: result.asset_type,
+    intent: result.intent,
+    recommendation: result.recommendation?.recommendation,
+    recommendation_score: result.recommendation?.recommendation_score,
+    confidence: result.recommendation?.confidence,
+    risk_level: result.risk_data?.risk_level,
+    risk_score: result.risk_data?.risk_score,
     saved_id: result.saved_analysis_id,
   } : null;
 

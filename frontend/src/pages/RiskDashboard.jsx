@@ -1,12 +1,13 @@
 import React from 'react';
-import { ShieldAlert, AlertTriangle, CheckCircle, Flame, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ShieldAlert, AlertTriangle, CheckCircle, Flame, ArrowUpRight, ArrowDownRight, Minus, TrendingUp, Coins } from 'lucide-react';
 import { useFinancial } from '../context/FinancialContext';
 
 export default function RiskDashboard() {
   const { result, analysisContext } = useFinancial();
 
-  const riskData = result?.risk_data || result?.analysis?.risk_data;
-  const marketData = result?.market_data || result?.analysis?.market_data;
+  const riskData = result?.risk_data;
+  const marketData = result?.market_data;
   const riskLevel = riskData?.risk_level || analysisContext?.risk_level || 'Unknown';
   const riskScore = riskData?.risk_score ?? '-';
   const marketDirection = marketData?.market_direction || 'neutral';
@@ -97,10 +98,18 @@ export default function RiskDashboard() {
       ) : (
         <div className="card empty-state-card">
           <ShieldAlert size={44} color="#f59e0b" style={{ opacity: 0.6 }} />
-          <h3>No Active Risk Assessment Available</h3>
+          <h3>No Analysis Available Yet</h3>
           <p>
-            Run an analysis from the AI Dashboard, Stock, or Crypto page to generate a real-time risk score and volatility evaluation.
+            Run an analysis from the Stock or Crypto page to generate a real-time risk assessment score.
           </p>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+            <Link to="/stocks" className="btn-primary" style={{ textDecoration: 'none', width: 'auto' }}>
+              <TrendingUp size={16} /> Go to Stock Analysis
+            </Link>
+            <Link to="/crypto" className="btn-primary" style={{ textDecoration: 'none', width: 'auto', backgroundColor: '#8b5cf6' }}>
+              <Coins size={16} /> Go to Crypto Analysis
+            </Link>
+          </div>
         </div>
       )}
     </div>

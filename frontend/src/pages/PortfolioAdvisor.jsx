@@ -1,11 +1,12 @@
 import React from 'react';
-import { Briefcase, CheckCircle2, AlertCircle, TrendingUp, ShieldAlert, Newspaper, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Briefcase, CheckCircle2, Info, TrendingUp, Coins } from 'lucide-react';
 import { useFinancial } from '../context/FinancialContext';
 
 export default function PortfolioAdvisor() {
   const { result, analysisContext } = useFinancial();
 
-  const recData = result?.recommendation || result?.analysis?.recommendation;
+  const recData = result?.recommendation;
   const recommendation = recData?.recommendation || analysisContext?.recommendation || 'UNKNOWN';
   const confidence = recData?.confidence || 'medium';
   const recScore = recData?.recommendation_score ?? '-';
@@ -30,7 +31,7 @@ export default function PortfolioAdvisor() {
             Portfolio Recommendation Advisor
           </h2>
           <p className="page-subtitle">
-            Synthesized multi-agent intelligence providing actionable investment guidance.
+            Synthesized multi-agent intelligence providing autonomous investment guidance.
           </p>
         </div>
       </div>
@@ -93,8 +94,16 @@ export default function PortfolioAdvisor() {
           <Briefcase size={44} color="#ec4899" style={{ opacity: 0.6 }} />
           <h3>No Portfolio Recommendation Active</h3>
           <p>
-            Execute an analysis from the AI Dashboard, Stock, or Crypto page to generate an autonomous portfolio recommendation.
+            Execute an analysis from the Stock or Crypto page to generate an autonomous portfolio recommendation.
           </p>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+            <Link to="/stocks" className="btn-primary" style={{ textDecoration: 'none', width: 'auto' }}>
+              <TrendingUp size={16} /> Go to Stock Analysis
+            </Link>
+            <Link to="/crypto" className="btn-primary" style={{ textDecoration: 'none', width: 'auto', backgroundColor: '#8b5cf6' }}>
+              <Coins size={16} /> Go to Crypto Analysis
+            </Link>
+          </div>
         </div>
       )}
     </div>
