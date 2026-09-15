@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend API routes and database setup.
 - Frontend UI dashboard development.
 
+## [1.0.0] - 2026-09-15 (Day 30: SmartFinancial Advisor V1.0 Completion & Stabilization)
+
+### Added
+- Finalized V1.0 milestone for SmartFinancial Advisor (FinSight 2.0).
+- Verified full backend test suite with 138 passing unit and integration tests.
+- Verified production build for 10-page React + Vite frontend (`npm run build`).
+- Verified end-to-end multi-agent query workflows for equities (`STOCK_ANALYSIS`), cryptocurrency (`CRYPTO_ANALYSIS`), news summaries (`GENERAL_FINANCIAL_NEWS`), and fallback handling (`UNSUPPORTED`).
+- Verified SQLite database persistence for query history, composite risk scores, recommendations, and execution telemetry (`agent_activity`).
+- Updated project documentation (`README.md`, `PROJECT_PLAN.md`, `TODO.md`, `CHANGELOG.md`) reflecting complete V1.0 architecture, setup instructions, and future Days 31–45 roadmap.
+- Conducted security check confirming `.env` file git-ignored, no hardcoded API keys/secrets present, and SQLite database files excluded.
+
 ## [0.29.0] - 2026-09-15 (Day 29: Agent-to-Agent Context & Decision State)
 
 ### Added

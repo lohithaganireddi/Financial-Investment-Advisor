@@ -1,117 +1,213 @@
-# SmartFinancial Advisor (FinSight 2.0) 🚀
+﻿# SmartFinancial Advisor (FinSight 2.0) 🚀
 
-Welcome to **SmartFinancial Advisor (FinSight 2.0)**! This is a long-term project designed to build a multi-agent financial intelligence application.
-
-Whether you are looking for real-time stock insights, crypto market trends, financial news summaries, or intelligent portfolio advice, FinSight 2.0 brings together specialized AI agents working together to give you clear financial clarity.
+Welcome to **SmartFinancial Advisor (FinSight 2.0)**! A deterministic, decision-driven multi-agent financial intelligence system that coordinates specialized AI agents to analyze stocks, cryptocurrency, and market news to deliver actionable portfolio recommendations and risk assessments.
 
 ---
 
-## 🎯 What are we building?
+## 🎯 What Does FinSight 2.0 Do?
 
-Instead of relying on a single AI that tries to do everything, FinSight 2.0 uses **specialized agents**. Think of agents like a team of financial experts working in the same room:
+FinSight 2.0 turns complex financial queries into clear, structured insights by coordinating a team of specialized software agents. Users can ask natural language questions or query assets directly through a multi-page web dashboard.
 
-1. 📈 **Stock Price Agent** – Fetches real-time stock prices and market data using the **Alpha Vantage API**.
-2. 🪙 **Crypto Agent** – Tracks cryptocurrency market prices and stats using the **CoinGecko API**.
-3. 📰 **Financial News Agent** – Gathers market headlines and sentiment using the **NewsData API**.
-4. ⚠️ **Risk Analysis Agent** – Evaluates stock/crypto volatile trends, risk scores, and market exposure.
-5. 💼 **Portfolio Recommendation Agent** – Synthesizes data from all agents to provide personalized investment recommendations.
+### 💡 Problem It Solves
+- **Fragmented Data**: Investors usually have to gather stock prices, crypto trends, news headlines, and risk metrics across multiple separate platforms.
+- **Overwhelming Information**: Raw financial market data lacks context and automated risk synthesis.
+- **Single-Point AI Bottlenecks**: Generic language models can produce ungrounded financial advice. FinSight 2.0 uses a **decision-driven multi-agent workflow** with strict failure guards to keep every analysis grounded in verified market data.
+
+---
+
+## ✨ Key Features
+
+- 📈 **Equities & Crypto Analysis**: Real-time market data retrieval for major equities and cryptocurrencies.
+- 📰 **Financial News Sentiment**: Aggregate sentiment scoring (positive, negative, neutral) from recent financial news headlines.
+- ⚠️ **Composite Risk Assessment**: Rule-based risk scoring incorporating price movement volatility, market direction, and asset type premiums.
+- 💼 **Automated Portfolio Recommendations**: Synthesized `BUY`, `HOLD`, or `AVOID` guidance with confidence metrics and decision factors.
+- 🔀 **Intent-Based Query Routing**: Natural language interpretation supporting equity tickers (`$AAPL`, `Tesla`), crypto coins (`Bitcoin`, `Solana`), news requests, and ambiguity detection.
+- 📊 **Agent Telemetry & Activity Dashboard**: Step-by-step pipeline execution tracking (`agents_used`, duration timing, step status, decision rationales).
+- 💾 **Historical Analysis Persistence**: Automatic storage of search queries, risk scores, recommendations, and execution telemetry in SQLite.
+- 🖥️ **Multi-Page React Frontend**: 10 distinct pages including Dashboard, Stock Analysis, Crypto Analysis, News, Risk Dashboard, Portfolio Advisor, Agent Activity, Analytics, History, and Settings.
+
+---
+
+## 🏗️ Multi-Agent Architecture
+
+```text
+User Request / Query
+       │
+       ▼
+Query Interpreter
+  (Natural language intent & asset classification)
+       │
+       ▼
+Shared Analysis Context  ◄──────────────────────────────────────┐
+       │                                                         │
+       ├──────► Market Agent (StockAgent / CryptoAgent) ─────────┤ (Updates
+       │              │ (Requires successful market data)        │  Shared
+       ├──────► Financial News Agent (NewsAgent) ────────────────┤  Context)
+       │              │ (Honest failure handling)                │
+       ├──────► Risk Analysis Agent (RiskAgent) ─────────────────┤
+       │              │ (Requires market data)                   │
+       └──────► Portfolio Recommendation Agent (PortfolioAgent) ─┘
+                      (Gated on verified market, risk & news data)
+```
+
+### 🤖 Specialized Agents
+
+1. **Stock Price Agent (`StockAgent`)**: Interacts with the **Alpha Vantage API** to fetch stock quotes, percentage changes, and directional trend summaries.
+2. **Crypto Agent (`CryptoAgent`)**: Interacts with the **CoinGecko API** to retrieve 24-hour cryptocurrency price action, market cap, and volume statistics.
+3. **Financial News Agent (`NewsAgent`)**: Interacts with the **NewsData API** to analyze business news headlines and calculate keyword sentiment scores.
+4. **Risk Analysis Agent (`RiskAgent`)**: Evaluates market movement volatility and trend direction to compute a composite risk score (0–100) and risk level (`low`, `medium`, `high`).
+5. **Portfolio Recommendation Agent (`PortfolioAgent`)**: Combines market direction, risk levels, and news sentiment into a final recommendation score, action (`buy`, `hold`, `avoid`), and confidence level.
+
+### 🧠 Shared `AnalysisContext` & Decision Pipeline
+
+The system uses a shared `AnalysisContext` dataclass (`agents/analysis_context.py`) that maintains state throughout execution:
+- **`market_data`**, **`news_data`**, **`risk_data`**, and **`portfolio_data`** are populated progressively.
+- Downstream decision helpers inspect context state before invoking dependent agents:
+  - `should_fetch_news`: Evaluates for stock, crypto, or news intent with valid search queries.
+  - `should_analyze_risk`: Requires verified, successful market data.
+  - `should_generate_portfolio_recommendation`: Requires successful market data, risk data, AND real news data.
+- **Honest Failure Policy**: If `NewsAgent` fails, `news_data` preserves the raw failure dict. The pipeline continues to `RiskAgent` (market data is sufficient), but `PortfolioAgent` is skipped to avoid fabricating neutral news sentiment.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Backend**: Python 3.10+, FastAPI, SQLAlchemy, SQLite, Pydantic v2.
+- **Frontend**: React 18, Vite, React Router DOM v6, Custom CSS with CSS Variables.
+- **External Services**: Alpha Vantage API (Stocks), CoinGecko API (Crypto), NewsData API (News).
+- **Testing**: Pytest, FastAPI TestClient, unittest.mock.
 
 ---
 
 ## 📁 Project Structure
 
-The codebase is organized into clear, modular components so it is easy to read, expand, and maintain week by week:
-
 ```text
 smartfinance_agenticai/
-├── agents/             # Autonomous AI agents (Stock, Crypto, News, Risk, Portfolio)
-├── backend/            # API endpoints, data models, and backend services
-├── frontend/           # User dashboard (UI framework to be selected in future phase)
-├── services/           # Third-party API wrappers (Alpha Vantage, CoinGecko, NewsData)
-├── tests/              # Unit tests and integration tests
-├── .env                # Local environment variables and API keys (git-ignored)
-├── .env.example        # Environment variable template
-├── .gitignore          # Files and folders ignored by Git
-├── CHANGELOG.md        # Record of updates and progress
-├── PROJECT_PLAN.md     # Detailed architecture and long-term project vision
-├── README.md           # Project overview and guide (You are here!)
-└── TODO.md             # Weekly task list and development roadmap
+├── agents/                     # Multi-Agent Intelligence Engine
+│   ├── analysis_context.py     # Shared AnalysisContext state & telemetry
+│   ├── orchestrator.py         # Dynamic pipeline orchestrator & decision guards
+│   ├── stock_agent.py          # Stock quote & sentiment agent
+│   ├── crypto_agent.py         # Crypto quote & trend agent
+│   ├── news_agent.py           # Financial news & sentiment agent
+│   ├── risk_agent.py           # Volatility & risk scoring agent
+│   └── portfolio_agent.py      # Recommendation synthesis agent
+├── backend/                    # FastAPI Backend Application
+│   ├── main.py                 # App entry point & middleware
+│   ├── routes.py               # REST API endpoints (/api/analyze, /api/query, /api/history)
+│   ├── database.py             # SQLAlchemy engine & SQLite schema migration
+│   ├── models.py               # Database ORM models
+│   └── schemas.py              # Pydantic request/response validation schemas
+├── services/                   # Service & Repository Layer
+│   ├── alpha_vantage.py        # Alpha Vantage API client wrapper
+│   ├── coingecko.py            # CoinGecko API client wrapper
+│   ├── newsdata.py             # NewsData API client wrapper
+│   ├── query_interpreter.py    # Natural language intent classifier & parser
+│   └── analysis_repository.py  # Database CRUD repository
+├── frontend/                   # React + Vite Frontend Application
+│   ├── src/
+│   │   ├── components/         # Header, Sidebar, AgentDashboard, ResultCard, etc.
+│   │   ├── context/            # FinancialContext API state provider
+│   │   ├── pages/              # 10 Application Pages (Home, Stocks, Crypto, etc.)
+│   │   ├── App.jsx             # Main Router Layout
+│   │   └── index.css           # Global stylesheet & design system
+│   └── package.json            # Frontend dependencies & scripts
+├── tests/                      # Automated Unit & Integration Tests
+│   ├── test_agents.py          # Agent & AnalysisContext unit tests
+│   ├── test_api.py             # Backend API endpoint tests
+│   ├── test_query_interpreter.py # Intent classifier tests
+│   └── test_services.py        # External API client wrapper tests
+├── .env.example                # Template for environment variables
+├── .gitignore                  # Git exclusions (.env, db, venv, node_modules)
+├── CHANGELOG.md                # Version history & milestone records
+├── PROJECT_PLAN.md             # Architecture overview & development roadmap
+├── README.md                   # Project documentation (You are here!)
+└── TODO.md                     # Completed V1.0 tasks & future roadmap
 ```
 
 ---
 
-## 🔌 API Endpoints & Persistence
+## ⚙️ Setup & Installation Instructions
 
-The backend provides a FastAPI service with local SQLite persistence (`smartfinance.db`):
+### Prerequisites
+- Python 3.10 or higher
+- Node.js 18 or higher & npm
 
-- **`GET /`** – API status and documentation link.
-- **`GET /health`** – Backend service health check.
-- **`POST /api/analyze`** – Direct multi-agent asset analysis endpoint.
-- **`POST /api/query`** – Natural language query analysis with **intent routing**: stock and crypto queries run the full multi-agent pipeline and persist to database (including structured `agent_activity`); general financial news queries (`"What's happening in the market?"`) are routed directly to the News Agent without DB persistence. Returns `intent` field (`STOCK_ANALYSIS`, `CRYPTO_ANALYSIS`, `GENERAL_FINANCIAL_NEWS`, or `UNSUPPORTED`).
-- **`GET /api/history`** – Retrieve recent saved financial asset analyses (limit 1 to 50), including persisted `agent_activity` sequence logs.
-- **`GET /api/history/{id}`** – Retrieve a specific saved analysis record by ID, including its stored `agent_activity` pipeline telemetry.
+### 1. Environment Configuration
 
+Copy `.env.example` to create your local `.env` file:
+```bash
+cp .env.example .env
+```
 
----
+Configure your API keys in `.env` (the application works with fallback/mock data if keys are omitted):
+```ini
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
+NEWSDATA_API_KEY=your_newsdata_key
+DATABASE_URL=sqlite:///./smartfinance.db
+```
 
-## 🔀 Dynamic Agent Routing
+*Note: Never commit `.env` or hardcode API keys! `.env` is git-ignored.*
 
-FinSight 2.0 uses **deterministic intent-based routing**. When you send a natural language query, the system:
+### 2. Backend Setup & Running
 
-1. **QueryInterpreter** classifies the query into an intent:
-   - **Expanded Equities**: AAPL, MSFT, TSLA, NVDA, AMZN, GOOGL, META, NFLX, AMD, INTC, KO, WMT.
-   - **Expanded Crypto**: Bitcoin, Ethereum, Solana, Dogecoin, Cardano, XRP/Ripple, Binance Coin, Polygon.
-   - **Smart Normalization & Boundary Matching**: Handles `$AAPL`, punctuation, and exact word boundaries (`\b...\b`).
-   - **Explicit News Routing**: Queries matching an asset with explicit news intent (e.g. `"Apple stock news"`) route directly to `GENERAL_FINANCIAL_NEWS` with `news_query`.
-   - **Ambiguity Guard**: Queries mentioning multiple distinct assets (e.g. `"Compare Apple and Tesla"`) return `UNSUPPORTED` with a helpful message.
-2. **Orchestrator.run_intent()** selects and executes the correct agent pipeline.
-3. Every response includes an **`agents_used`** list and a structured **`agent_activity`** array recording step-by-step execution details (`agent`, `status`, `order`, `summary`).
+```bash
+# Create and activate Python virtual environment
+python -m venv venv
 
-| Intent | Agents Executed | DB Persist? |
-|--------|----------------|-------------|
-| `STOCK_ANALYSIS` | StockAgent → NewsAgent → RiskAgent → PortfolioAgent | ✅ Yes |
-| `CRYPTO_ANALYSIS` | CryptoAgent → NewsAgent → RiskAgent → PortfolioAgent | ✅ Yes |
-| `GENERAL_FINANCIAL_NEWS` | NewsAgent only | ❌ No |
-| `UNSUPPORTED` | None | ❌ No |
+# Windows PowerShell:
+.\venv\Scripts\Activate.ps1
 
-This architecture keeps routing logic in one place (the Orchestrator), tracking real-time execution status for the frontend Agent Activity Dashboard (`AgentDashboard.jsx`).
+# Install Python dependencies
+pip install -r requirements.txt
 
-The **Agent Activity Dashboard** visualizes:
-- **Analysis Context Banner**: Displays active asset identifier, analysis type, user prompt query, recommendation badge, and risk level.
-- **Executed Pipeline Flow**: Dynamic horizontal flow bar (`Agent A → Agent B → Agent C → Agent D`) with human-friendly display names (`Stock Price Agent`, `Crypto Agent`, `Financial News Agent`, `Risk Analysis Agent`, `Portfolio Recommendation Agent`).
-- **Summary Metrics**: Total Agents Executed, Successful, Failed, and Pipeline Status.
-- **Vertical Execution Timeline**: Step-by-step sequence (`#1` → `#2` → `#3` → `#4`) with status markers and agent icons.
-- **Agent Telemetry Table**: Agent names, status badges, sequence numbers, and execution summaries.
-- **Tab Navigation**: Seamless toggling between **Financial Intelligence Dashboard** and **Agent Activity Dashboard**.
+# Start FastAPI backend server
+uvicorn backend.main:app --reload --port 8000
+```
+Backend API interactive documentation will be available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
+### 3. Frontend Setup & Running
 
+```bash
+# Navigate to frontend directory
+cd frontend
 
+# Install Node packages
+npm install
 
-
-
-## ⚙️ Getting Started (Day 1 Foundation)
-
-1. **Clone or open the repository**:
-   Open this folder in your favorite code editor (VS Code, Cursor, Antigravity, etc.).
-
-2. **Configure Environment Variables**:
-   Copy `.env.example` to `.env` (if not already present):
-   ```bash
-   cp .env.example .env
-   ```
-   *Note: Never hardcode API keys directly into code! Always keep your keys inside `.env`.*
-
-3. **Explore the Roadmap**:
-   Check `PROJECT_PLAN.md` for the architectural overview and `TODO.md` to see upcoming development tasks.
+# Start Vite development server
+npm run dev
+```
+Frontend web application will be available at [http://localhost:5173](http://localhost:5173).
 
 ---
 
-## 📜 Development Guidelines
-- **Modularity First**: Keep agents, backend routes, and services separated.
-- **Security First**: Keep API keys in `.env` and never check sensitive files into version control.
-- **Incremental Steps**: Build one layer at a time (APIs -> Agents -> Backend -> Frontend -> Auth).
+## 🧪 Testing
+
+Run the backend test suite:
+```bash
+.\venv\Scripts\pytest.exe -q
+```
+*Verification: 138 unit and integration tests passing.*
+
+Run the frontend production build test:
+```bash
+cd frontend
+npm run build
+```
+*Verification: Vite build compiles with 0 errors.*
 
 ---
 
-## 📄 License
-This project is open-source and intended for educational and personal finance research purposes.
+## 💬 Example Queries
+
+- **Equities Analysis**: `"Should I invest in Apple?"` or `"Analyze TSLA"`
+- **Cryptocurrency Analysis**: `"What is the risk of Bitcoin?"` or `"Tell me about Ethereum"`
+- **General News Query**: `"Latest financial news"`
+- **Specific Asset News**: `"Apple stock news"`
+- **Ambiguous Multi-Asset Query**: `"Compare Apple and Tesla"` *(Returns UNSUPPORTED with multi-asset single-asset guidance)*
+
+---
+
+## ⚠️ Financial Disclaimer
+
+**SmartFinancial Advisor (FinSight 2.0)** is an educational software project for algorithmic data synthesis and personal finance research. All recommendations, scores, and analysis summaries are generated automatically by software logic and **do not constitute professional financial advice**. Always consult a certified financial advisor before making real-world investment decisions.
