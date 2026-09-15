@@ -44,11 +44,11 @@
 ## Phase 4: Backend API & Database
 - [x] Create FastAPI backend application skeleton in `backend/main.py`.
 - [x] Implement initial health check (`/health`) and root (`/`) endpoints.
-- [ ] Define API request/response schemas.
-- [ ] Create REST endpoints for agent queries (`/api/v1/stock`, `/api/v1/crypto`, `/api/v1/news`, `/api/v1/portfolio`).
+- [x] Define API request/response schemas in `backend/schemas.py`.
+- [x] Create REST endpoint for financial analysis (`POST /api/analyze`).
 - [ ] Setup database models (SQLAlchemy / Alembic) for storing portfolios and search history.
 - [ ] Implement user authentication (JWT tokens / passwords).
-- [ ] Write backend endpoint tests in `tests/test_backend.py`.
+- [x] Write backend endpoint tests in `tests/test_api.py`.
 
 
 ---

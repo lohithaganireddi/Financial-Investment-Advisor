@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2026-09-15 (Day 12: Backend API Integration)
+
+### Added
+- Created `backend/schemas.py` defining Pydantic request model `AnalyzeRequest` for input validation.
+- Created `backend/routes.py` with `POST /api/analyze` route connecting FastAPI to the multi-agent `Orchestrator`.
+- Integrated `api_router` into `backend/main.py` while preserving existing `GET /` and `GET /health` endpoints.
+- Implemented dependency provider `get_orchestrator` enabling test isolation without hardcoding or global state mutation.
+- Created `tests/test_api.py` with 7 comprehensive unit/integration tests for API endpoints using FastAPI `TestClient` and mock Orchestrator (80 total unit tests passing across project).
+- Updated `TODO.md` tracking Phase 4 progress.
+
+---
+
 ## [0.11.0] - 2026-09-15 (Day 11: Multi-Agent Orchestrator)
 
 ### Added

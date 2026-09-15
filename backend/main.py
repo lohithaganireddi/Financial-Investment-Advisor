@@ -1,10 +1,12 @@
-"""
+﻿"""
 SmartFinancial Advisor (FinSight 2.0) - Backend Application Entry Point
 
-This file initializes the FastAPI backend server and defines initial health-check endpoints.
+This file initializes the FastAPI backend server, defines health-check endpoints,
+and includes API route handlers.
 """
 
 from fastapi import FastAPI
+from backend.routes import router as api_router
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -12,6 +14,9 @@ app = FastAPI(
     description="Backend service for FinSight 2.0 multi-agent financial intelligence system.",
     version="0.1.0"
 )
+
+# Include API routes
+app.include_router(api_router)
 
 
 @app.get("/")
