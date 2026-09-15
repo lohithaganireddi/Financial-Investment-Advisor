@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-09-15 (Day 4: CoinGecko Crypto Data Service Layer)
+
+### Added
+- Created `services/coingecko.py` client wrapper for CoinGecko market data API.
+- Implemented secure API key reading from `.env` (`COINGECKO_API_KEY`) and authentication via `x-cg-demo-api-key` header.
+- Implemented strict error handling for unconfigured keys, empty coin IDs, HTTP 429 rate limits, empty market payloads, and network failures.
+- Updated `tests/test_services.py` with 6 new mock unit tests for `CoinGeckoService` (12 total tests passing).
+- Updated `TODO.md` tracking Phase 2 progress.
+
+---
+
 ## [0.3.0] - 2026-09-15 (Day 3: Alpha Vantage Service Layer)
 
 ### Added
