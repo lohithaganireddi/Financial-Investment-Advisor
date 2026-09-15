@@ -1056,18 +1056,37 @@ def test_orchestrator_failed_market_agent():
 
 
 def test_orchestrator_failed_news_agent():
-    """A failed NewsAgent result is surfaced with step='news_agent'."""
+    """
+    A failed NewsAgent is logged as failed in agent_activity.
+    Pipeline continues to RiskAgent (market data is sufficient for risk analysis).
+    PortfolioAgent is SKIPPED — news context is unavailable and fabricating sentiment
+    is not acceptable for a financial intelligence application.
+    Overall result is still success=True (market + risk data are valid partial outputs).
+    """
     failed_news = {"success": False, "agent": "NewsAgent", "query": "AAPL", "error": "News API unavailable"}
-    orch, *_ = _make_orchestrator(
+    orch, _, _, _, mock_risk, mock_portfolio = _make_orchestrator(
         market_result=_make_stock_market_data(),
         news_result=failed_news,
+        risk_result=_make_risk_data(),
+        recommendation_result=_make_recommendation(),
         asset_type="stock",
     )
     result = orch.run("stock", "AAPL")
-    assert result["success"] is False
-    assert result.get("step") == "news_agent"
-    assert "News API unavailable" in result["error"]
+    assert result["success"] is True
     assert "market_data" in result
+    assert "risk_data" in result
+    # PortfolioAgent must NOT have been called — no fabricated news to score
+    mock_portfolio.generate_recommendation.assert_not_called()
+    # news_data should reflect the real failure — not a synthetic success
+    assert result["news_data"]["success"] is False
+    # Activity: StockAgent success, NewsAgent failed, RiskAgent success; NO PortfolioAgent
+    activity = result["agent_activity"]
+    assert activity[1]["agent"] == "NewsAgent"
+    assert activity[1]["status"] == "failed"
+    assert "fabricating news sentiment is not acceptable" in activity[1]["decision"]
+    assert activity[2]["agent"] == "RiskAgent"
+    assert activity[2]["status"] == "success"
+    assert all(a["agent"] != "PortfolioAgent" for a in activity)
 
 
 def test_orchestrator_failed_risk_agent():
@@ -1584,14 +1603,20 @@ def test_run_intent_stock_failed_market_agent_stops_pipeline():
     mock_portfolio.generate_recommendation.assert_not_called()
 
 
-def test_run_intent_stock_news_failure_partial_agents_used():
+def test_run_intent_stock_news_failure_continuation_behavior():
     """
-    NewsAgent failure in STOCK_ANALYSIS: agents_used=[StockAgent, NewsAgent], agent_activity records StockAgent success and NewsAgent failed.
-    RiskAgent and PortfolioAgent are NOT called.
+    NewsAgent failure in STOCK_ANALYSIS:
+    - StockAgent runs and succeeds.
+    - NewsAgent runs and fails; its raw failure dict is preserved (no synthetic success injected).
+    - RiskAgent runs — market data is sufficient for risk analysis.
+    - PortfolioAgent is SKIPPED — news context unavailable; fabricating sentiment is not acceptable.
+    - Overall success=True (market + risk data are valid partial outputs).
     """
     orch, _, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
         stock_result=_make_stock_market_data("bullish"),
         news_result={"success": False, "agent": "NewsAgent", "error": "No articles found"},
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(100, "buy"),
     )
     interpreted = {
         "success": True, "intent": "STOCK_ANALYSIS",
@@ -1600,19 +1625,22 @@ def test_run_intent_stock_news_failure_partial_agents_used():
 
     result = orch.run_intent(interpreted)
 
-    assert result["success"] is False
-    assert result["agents_used"] == ["StockAgent", "NewsAgent"]
+    assert result["success"] is True
+    # PortfolioAgent must NOT appear in agents_used
+    assert result["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent"]
     activity = result["agent_activity"]
-    assert len(activity) == 2
+    assert len(activity) == 3
     assert activity[0]["status"] == "success"
     assert activity[1]["agent"] == "NewsAgent"
     assert activity[1]["status"] == "failed"
-    assert activity[1]["order"] == 2
-    assert "No articles found" in activity[1]["summary"]
-    assert result["step"] == "news_agent"
-    mock_risk.analyze_risk.assert_not_called()
+    assert "fabricating news sentiment is not acceptable" in activity[1]["decision"]
+    assert activity[2]["agent"] == "RiskAgent"
+    assert activity[2]["status"] == "success"
+    # news_data must be the real failure dict — not a synthetic success
+    assert result["news_data"]["success"] is False
+    # RiskAgent called (market data available); PortfolioAgent NOT called (no real news)
+    mock_risk.analyze_risk.assert_called_once()
     mock_portfolio.generate_recommendation.assert_not_called()
-
 
 
 def test_run_intent_intent_constants_match_query_interpreter():
@@ -1626,3 +1654,157 @@ def test_run_intent_intent_constants_match_query_interpreter():
     assert Orchestrator.INTENT_CRYPTO      == QueryInterpreter.INTENT_CRYPTO
     assert Orchestrator.INTENT_NEWS        == QueryInterpreter.INTENT_NEWS
     assert Orchestrator.INTENT_UNSUPPORTED == QueryInterpreter.INTENT_UNSUPPORTED
+
+
+# ==========================================
+# Day 28: Agentic Orchestration Decision Tests
+# ==========================================
+
+def test_day28_decision_helpers():
+    """Test deterministic decision functions on Orchestrator."""
+    orch = Orchestrator()
+
+    # should_fetch_news
+    assert orch.should_fetch_news("STOCK_ANALYSIS", "Apple") is True
+    assert orch.should_fetch_news("CRYPTO_ANALYSIS", "Bitcoin") is True
+    assert orch.should_fetch_news("GENERAL_FINANCIAL_NEWS", "finance") is True
+    assert orch.should_fetch_news("UNSUPPORTED", "anything") is False
+    assert orch.should_fetch_news("STOCK_ANALYSIS", "") is False
+
+    # should_analyze_risk
+    assert orch.should_analyze_risk("STOCK_ANALYSIS", {"success": True}) is True
+    assert orch.should_analyze_risk("CRYPTO_ANALYSIS", {"success": True}) is True
+    assert orch.should_analyze_risk("STOCK_ANALYSIS", {"success": False}) is False
+    assert orch.should_analyze_risk("GENERAL_FINANCIAL_NEWS", {"success": True}) is False
+
+    # should_generate_portfolio_recommendation — now requires successful news_data too
+    assert orch.should_generate_portfolio_recommendation("STOCK_ANALYSIS", {"success": True}, {"success": True}, {"success": True}) is True
+    assert orch.should_generate_portfolio_recommendation("STOCK_ANALYSIS", {"success": True}, {"success": True}, {"success": False}) is False
+    assert orch.should_generate_portfolio_recommendation("STOCK_ANALYSIS", {"success": True}, {"success": True}, None) is False
+    assert orch.should_generate_portfolio_recommendation("STOCK_ANALYSIS", {"success": True}, {"success": False}, {"success": True}) is False
+    assert orch.should_generate_portfolio_recommendation("STOCK_ANALYSIS", {"success": False}, {"success": True}, {"success": True}) is False
+    assert orch.should_generate_portfolio_recommendation("GENERAL_FINANCIAL_NEWS", {"success": True}, {"success": True}, {"success": True}) is False
+
+
+def test_day28_market_failure_halts_pipeline():
+    """When StockAgent fails, RiskAgent and PortfolioAgent are NOT called."""
+    orch, mock_stock, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result={"success": False, "agent": "StockAgent", "error": "Symbol not found"}
+    )
+    res = orch.run_intent({"success": True, "intent": "STOCK_ANALYSIS", "asset_type": "stock", "asset": "INVALID"})
+
+    assert res["success"] is False
+    assert res["agents_used"] == ["StockAgent"]
+    assert len(res["agent_activity"]) == 1
+    assert res["agent_activity"][0]["status"] == "failed"
+    assert "halting" in res["agent_activity"][0]["decision"]
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day28_risk_failure_halts_portfolio():
+    """When RiskAgent fails, PortfolioAgent is NOT called."""
+    orch, _, _, _, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data(),
+        news_result=_make_news_data(),
+        risk_result={"success": False, "agent": "RiskAgent", "error": "Invalid metrics"},
+    )
+    res = orch.run_intent({"success": True, "intent": "STOCK_ANALYSIS", "asset_type": "stock", "asset": "AAPL", "news_query": "Apple"})
+
+    assert res["success"] is False
+    assert res["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent"]
+    assert len(res["agent_activity"]) == 3
+    assert res["agent_activity"][2]["status"] == "failed"
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day28_unsupported_query_executes_zero_agents():
+    """UNSUPPORTED query executes zero agents."""
+    orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent()
+    res = orch.run_intent({"success": False, "intent": "UNSUPPORTED", "error": "Unknown asset"})
+
+    assert res["success"] is False
+    assert res["agents_used"] == []
+    assert res["agent_activity"] == []
+    mock_stock.analyze_stock.assert_not_called()
+    mock_crypto.analyze_crypto.assert_not_called()
+    mock_news.analyze_news.assert_not_called()
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+# ==========================================
+# Day 28 Review: Honest NewsAgent Failure Tests
+# ==========================================
+
+def test_day28_news_exception_no_synthetic_data():
+    """
+    When NewsAgent raises an exception (not just a failure return):
+    - news_data in result must NOT be a synthetic success dict.
+    - news_data.success must be False.
+    - PortfolioAgent must NOT be called.
+    - RiskAgent MUST still be called (market data is sufficient for risk).
+    - activity for NewsAgent must be 'failed' with no fake sentiment.
+    """
+    orch, _, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(100, "buy"),
+    )
+    mock_news.analyze_news.side_effect = RuntimeError("Network timeout")
+
+    interpreted = {
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    }
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is True
+    # news_data must be a real failure record — not a synthetic {"success": True, "overall_sentiment": "neutral"}
+    assert isinstance(result["news_data"], dict)
+    assert result["news_data"]["success"] is False
+    assert "news_data" in result
+    assert result["news_data"].get("overall_sentiment") is None, (
+        "Orchestrator must NOT invent news sentiment when NewsAgent raises an exception"
+    )
+    # PortfolioAgent NOT called — no fabricated news to score
+    mock_portfolio.generate_recommendation.assert_not_called()
+    # RiskAgent called — market data is valid
+    mock_risk.analyze_risk.assert_called_once()
+    # agents_used: StockAgent, NewsAgent, RiskAgent — no PortfolioAgent
+    assert result["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent"]
+    # NewsAgent activity entry must reflect failure
+    activity = result["agent_activity"]
+    news_act = next((a for a in activity if a["agent"] == "NewsAgent"), None)
+    assert news_act is not None
+    assert news_act["status"] == "failed"
+    assert "fabricating news sentiment is not acceptable" in news_act["decision"]
+
+
+def test_day28_crypto_news_failure_portfolio_skipped():
+    """
+    Same honest behaviour for CRYPTO_ANALYSIS: when news fails,
+    RiskAgent runs, PortfolioAgent is skipped, news_data is the real failure dict.
+    """
+    orch, _, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        crypto_result=_make_crypto_market_data("bullish"),
+        news_result={"success": False, "agent": "NewsAgent", "error": "Rate limit exceeded"},
+        risk_result=_make_risk_data("medium"),
+        portfolio_result=_make_recommendation(65, "hold"),
+    )
+    interpreted = {
+        "success": True, "intent": "CRYPTO_ANALYSIS",
+        "asset_type": "crypto", "asset": "bitcoin", "news_query": "bitcoin",
+    }
+    result = orch.run_intent(interpreted)
+
+    assert result["success"] is True
+    assert result["agents_used"] == ["CryptoAgent", "NewsAgent", "RiskAgent"]
+    assert result["news_data"]["success"] is False
+    mock_risk.analyze_risk.assert_called_once()
+    mock_portfolio.generate_recommendation.assert_not_called()
+    activity = result["agent_activity"]
+    news_act = next((a for a in activity if a["agent"] == "NewsAgent"), None)
+    assert news_act["status"] == "failed"
+    assert all(a["agent"] != "PortfolioAgent" for a in activity)
+

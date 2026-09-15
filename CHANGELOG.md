@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend API routes and database setup.
 - Frontend UI dashboard development.
 
+## [0.28.0] - 2026-09-15 (Day 28: Advanced Agentic Orchestration)
+
+### Added
+- Upgraded `Orchestrator` (`agents/orchestrator.py`) into a decision-driven multi-agent workflow evaluating intermediate agent outputs.
+- Added explicit deterministic decision helpers: `should_fetch_news()`, `should_analyze_risk()`, and `should_generate_portfolio_recommendation()`.
+- Implemented intelligent failure decisions: market agent failure halts pipeline to prevent ungrounded downstream analysis; news agent failure applies neutral news sentiment fallback so risk and portfolio analysis proceed safely; risk agent failure halts portfolio recommendation to prevent risk-unaware advice.
+- Extended `agent_activity` schema with explainable `decision` rationale notes for every executed step.
+- Added 4 new decision tests in `tests/test_agents.py` (total test suite expanded to 121 passing tests).
+
 ## [0.25.0] - 2026-09-15 (Day 25: Strengthen Natural-Language Query Interpretation)
 
 ### Added
