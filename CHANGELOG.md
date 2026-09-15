@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.10.0] - 2026-09-15 (Day 10: Portfolio Recommendation Agent Module)
+
+### Added
+- Created `agents/portfolio_agent.py` implementing `PortfolioAgent` with a deterministic recommendation scoring formula.
+- `PortfolioAgent.generate_recommendation(market_data, risk_data, news_data)` combines StockAgent/CryptoAgent, RiskAgent, and NewsAgent outputs into a structured buy/hold/avoid recommendation.
+- Scoring rules: base=50, market direction (bullish=+20, neutral=0, bearish=-20), risk level (low=+15, medium=0, high=-20), news sentiment (positive=+15, neutral=0, negative=-15), capped 0-100.
+- Confidence logic: 3 aligned signals → "high", 2 aligned → "medium", otherwise → "low".
+- Full input validation: rejects non-dict, empty, failed upstream inputs, unsupported market agent, and missing required fields.
+- Output includes `recommendation_score`, `recommendation`, `confidence`, `factors`, `summary`, and educational `disclaimer`.
+- Exported `PortfolioAgent` from `agents/__init__.py`.
+- Updated `tests/test_agents.py` with 12 new mock unit tests for `PortfolioAgent` (60 total unit tests passing across project).
+- Updated `TODO.md` tracking Phase 3 progress.
+
+---
+
 ## [0.9.0] - 2026-09-15 (Day 9: Risk Analysis Agent Module)
 
 ### Added

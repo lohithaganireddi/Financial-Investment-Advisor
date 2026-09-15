@@ -10,6 +10,7 @@ from agents.stock_agent import StockAgent
 from agents.crypto_agent import CryptoAgent
 from agents.news_agent import NewsAgent
 from agents.risk_agent import RiskAgent
+from agents.portfolio_agent import PortfolioAgent
 
 
 # ==========================================
@@ -649,3 +650,250 @@ def test_risk_agent_invalid_percentage():
     assert result["agent"] == "RiskAgent"
     assert "parse" in result["error"].lower() or "Cannot" in result["error"]
 
+
+
+# ==========================================
+# PortfolioAgent Unit Tests
+# ==========================================
+
+# ---- Shared fixture helpers -----------------------------------------------
+
+def _stock_market_data(direction="bullish"):
+    """Return a minimal valid StockAgent output for testing."""
+    return {
+        "success": True,
+        "agent": "StockAgent",
+        "symbol": "AAPL",
+        "price": 184.5,
+        "change": 2.5,
+        "change_percent": 1.37,
+        "market_direction": direction,
+    }
+
+def _risk_data(level="low"):
+    """Return a minimal valid RiskAgent output for testing."""
+    return {
+        "success": True,
+        "agent": "RiskAgent",
+        "asset": "AAPL",
+        "asset_type": "stock",
+        "risk_score": 30,
+        "risk_level": level,
+    }
+
+def _news_data(sentiment="positive"):
+    """Return a minimal valid NewsAgent output for testing."""
+    return {
+        "success": True,
+        "agent": "NewsAgent",
+        "query": "AAPL",
+        "total_results": 5,
+        "overall_sentiment": sentiment,
+        "articles": [],
+    }
+
+# ---- Tests ---------------------------------------------------------------
+
+def test_portfolio_agent_invalid_market_data():
+    """Test that non-dict or empty market_data returns a validation error."""
+    agent = PortfolioAgent()
+    for bad in ["string", 42, None, [], {}]:
+        result = agent.generate_recommendation(bad, _risk_data(), _news_data())
+        assert result["success"] is False
+        assert result["agent"] == "PortfolioAgent"
+        assert "market_data" in result["error"]
+
+
+def test_portfolio_agent_invalid_risk_data():
+    """Test that non-dict or empty risk_data returns a validation error."""
+    agent = PortfolioAgent()
+    for bad in ["string", 42, None, [], {}]:
+        result = agent.generate_recommendation(_stock_market_data(), bad, _news_data())
+        assert result["success"] is False
+        assert result["agent"] == "PortfolioAgent"
+        assert "risk_data" in result["error"]
+
+
+def test_portfolio_agent_invalid_news_data():
+    """Test that non-dict or empty news_data returns a validation error."""
+    agent = PortfolioAgent()
+    for bad in ["string", 42, None, [], {}]:
+        result = agent.generate_recommendation(_stock_market_data(), _risk_data(), bad)
+        assert result["success"] is False
+        assert result["agent"] == "PortfolioAgent"
+        assert "news_data" in result["error"]
+
+
+def test_portfolio_agent_failed_market_agent():
+    """Test that a failed market_data (success=False) is rejected."""
+    agent = PortfolioAgent()
+    bad_market = {
+        "success": False,
+        "agent": "StockAgent",
+        "symbol": "AAPL",
+        "error": "API key missing",
+    }
+    result = agent.generate_recommendation(bad_market, _risk_data(), _news_data())
+    assert result["success"] is False
+    assert result["agent"] == "PortfolioAgent"
+    assert "failure" in result["error"].lower() or "market_data" in result["error"]
+
+
+def test_portfolio_agent_unsupported_market_agent():
+    """Test that an unsupported market agent name returns a validation error."""
+    agent = PortfolioAgent()
+    bad_market = {
+        "success": True,
+        "agent": "WeatherAgent",
+        "symbol": "AAPL",
+        "market_direction": "bullish",
+    }
+    result = agent.generate_recommendation(bad_market, _risk_data(), _news_data())
+    assert result["success"] is False
+    assert result["agent"] == "PortfolioAgent"
+    assert "WeatherAgent" in result["error"] or "Unsupported" in result["error"]
+
+
+def test_portfolio_agent_buy_recommendation():
+    """
+    Test that all-positive signals produce a BUY recommendation with exact score.
+    base=50, bullish=+20, low=+15, positive=+15 -> score=100 -> buy
+    """
+    agent = PortfolioAgent()
+    result = agent.generate_recommendation(
+        _stock_market_data("bullish"),
+        _risk_data("low"),
+        _news_data("positive"),
+    )
+    assert result["success"] is True
+    assert result["agent"] == "PortfolioAgent"
+    assert result["recommendation_score"] == 100
+    assert result["recommendation"] == "buy"
+    assert result["confidence"] == "high"
+    assert result["asset"] == "AAPL"
+    assert result["asset_type"] == "stock"
+    assert result["market_direction"] == "bullish"
+    assert result["risk_level"] == "low"
+    assert result["news_sentiment"] == "positive"
+    assert "disclaimer" in result
+    assert len(result["factors"]) == 3
+
+
+def test_portfolio_agent_hold_recommendation():
+    """
+    Test that neutral signals produce a HOLD recommendation with exact score.
+    base=50, neutral=0, medium=0, neutral=0 -> score=50 -> hold
+    """
+    agent = PortfolioAgent()
+    result = agent.generate_recommendation(
+        _stock_market_data("neutral"),
+        _risk_data("medium"),
+        _news_data("neutral"),
+    )
+    assert result["success"] is True
+    assert result["recommendation_score"] == 50
+    assert result["recommendation"] == "hold"
+
+
+def test_portfolio_agent_avoid_recommendation():
+    """
+    Test that all-negative signals produce an AVOID recommendation with exact score.
+    base=50, bearish=-20, high=-20, negative=-15 -> raw=-5 -> capped at 0 -> avoid
+    """
+    agent = PortfolioAgent()
+    result = agent.generate_recommendation(
+        _stock_market_data("bearish"),
+        _risk_data("high"),
+        _news_data("negative"),
+    )
+    assert result["success"] is True
+    assert result["recommendation_score"] == 0
+    assert result["recommendation"] == "avoid"
+    assert result["confidence"] == "high"
+
+
+def test_portfolio_agent_high_risk_reduces_score():
+    """
+    Test that high risk reduces score by 20 vs low risk.
+    base=50, bullish=+20, high=-20, positive=+15 -> score=65 -> hold
+    """
+    agent = PortfolioAgent()
+    result = agent.generate_recommendation(
+        _stock_market_data("bullish"),
+        _risk_data("high"),
+        _news_data("positive"),
+    )
+    assert result["success"] is True
+    assert result["recommendation_score"] == 65
+    assert result["recommendation"] == "hold"
+    assert result["risk_level"] == "high"
+
+
+def test_portfolio_agent_negative_news_reduces_score():
+    """
+    Test that negative news reduces score by 15.
+    base=50, bullish=+20, low=+15, negative=-15 -> score=70 -> buy
+    """
+    agent = PortfolioAgent()
+    result = agent.generate_recommendation(
+        _stock_market_data("bullish"),
+        _risk_data("low"),
+        _news_data("negative"),
+    )
+    assert result["success"] is True
+    assert result["recommendation_score"] == 70
+    assert result["recommendation"] == "buy"
+    assert result["news_sentiment"] == "negative"
+
+
+def test_portfolio_agent_confidence_calculation():
+    """Test confidence levels for different signal combinations."""
+    agent = PortfolioAgent()
+
+    # 3 positive signals -> high confidence
+    r = agent.generate_recommendation(
+        _stock_market_data("bullish"), _risk_data("low"), _news_data("positive")
+    )
+    assert r["confidence"] == "high"
+
+    # 2 positive signals (neutral news) -> medium confidence
+    r = agent.generate_recommendation(
+        _stock_market_data("bullish"), _risk_data("low"), _news_data("neutral")
+    )
+    assert r["confidence"] == "medium"
+
+    # Mixed signals (1 positive, 1 negative, 1 neutral) -> low confidence
+    r = agent.generate_recommendation(
+        _stock_market_data("bullish"), _risk_data("high"), _news_data("neutral")
+    )
+    assert r["confidence"] == "low"
+
+
+def test_portfolio_agent_crypto_recommendation():
+    """
+    Test that CryptoAgent market data works correctly.
+    coin_id is the asset identifier; asset_type is crypto.
+    base=50, bullish=+20, low=+15, positive=+15 -> score=100 -> buy
+    """
+    agent = PortfolioAgent()
+    crypto_market = {
+        "success": True,
+        "agent": "CryptoAgent",
+        "coin_id": "bitcoin",
+        "symbol": "BTC",
+        "name": "Bitcoin",
+        "price": 65000.0,
+        "change_percent_24h": 3.5,
+        "market_direction": "bullish",
+    }
+    result = agent.generate_recommendation(
+        crypto_market,
+        _risk_data("low"),
+        _news_data("positive"),
+    )
+    assert result["success"] is True
+    assert result["asset"] == "bitcoin"
+    assert result["asset_type"] == "crypto"
+    assert result["recommendation_score"] == 100
+    assert result["recommendation"] == "buy"
+    assert result["confidence"] == "high"
