@@ -15,12 +15,12 @@
 ---
 
 ## Phase 2: External Services & API Wrappers
-- [ ] Create `services/alpha_vantage.py` client wrapper for Stock market data.
+- [x] Create `services/alpha_vantage.py` client wrapper for Stock market data.
 - [ ] Create `services/coingecko.py` client wrapper for Crypto market data.
 - [ ] Create `services/newsdata.py` client wrapper for Financial News.
-- [ ] Implement rate limiting and error handling for external API requests.
-- [ ] Add offline/mock data fallback mode for development testing.
-- [ ] Write unit tests for API services in `tests/test_services.py`.
+- [x] Implement rate limiting and error handling for external API requests.
+- [x] Write unit tests for API services in `tests/test_services.py`.
+
 
 ---
 

@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-09-15 (Day 3: Alpha Vantage Service Layer)
+
+### Added
+- Installed `httpx` (0.28.1) and `pytest` (9.1.1) in virtual environment `venv`.
+- Created `services/alpha_vantage.py` handling `GLOBAL_QUOTE` queries to Alpha Vantage API.
+- Implemented secure API key reading from `.env` (`ALPHA_VANTAGE_API_KEY`).
+- Implemented comprehensive error handling for missing API keys, rate limits, invalid symbols, network failures, and HTTP errors.
+- Created `tests/test_services.py` with 6 automated mock unit tests verifying response formatting and error handling without live network calls.
+- Updated `requirements.txt` with `httpx` and `pytest`.
+
+---
+
 ## [0.2.0] - 2026-09-15 (Day 2: Backend Foundation & Health Check API)
 
 ### Added
