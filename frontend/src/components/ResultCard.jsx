@@ -42,6 +42,8 @@ export default function ResultCard({ result }) {
   const riskLevel = (riskData.risk_level || 'medium').toLowerCase();
   const riskColor = riskLevel === 'high' ? 'var(--red-avoid)' : riskLevel === 'low' ? 'var(--green-buy)' : 'var(--amber-hold)';
 
+  const agentActivity = result.agent_activity || analysisData.agent_activity || [];
+
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
@@ -131,6 +133,27 @@ export default function ResultCard({ result }) {
         </div>
       </div>
 
+      {/* Agent Activity Section */}
+      {agentActivity && agentActivity.length > 0 && (
+        <div style={{ marginTop: '1.25rem' }}>
+          <strong style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '0.5rem' }}>
+            Agent Execution Activity
+          </strong>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {agentActivity.map((item, idx) => (
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(15, 23, 42, 0.5)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}>
+                <span className="badge badge-conf" style={{ fontSize: '0.75rem' }}>#{item.order}</span>
+                <strong style={{ color: 'var(--text-main)' }}>{item.agent}</strong>
+                <span className={`badge ${item.status === 'success' ? 'badge-buy' : 'badge-avoid'}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}>
+                  {item.status.toUpperCase()}
+                </span>
+                <span style={{ color: 'var(--text-muted)', flex: 1 }}>{item.summary}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       {analysisData.summary && (
         <div style={{ background: 'rgba(11, 15, 25, 0.6)', padding: '1.1rem', borderRadius: '10px', borderLeft: '4px solid var(--accent-blue)', margin: '1.25rem 0' }}>
@@ -157,6 +180,7 @@ export default function ResultCard({ result }) {
           </ul>
         </div>
       )}
+
 
       {/* Educational Disclaimer */}
       <div className="disclaimer-box">

@@ -190,13 +190,19 @@ def test_analyze_orchestrator_application_failure():
 # ==========================================
 
 def test_query_endpoint_valid_stock():
-    """Test POST /api/query with a valid stock natural language query and verify persistence."""
+    """Test POST /api/query with a valid stock natural language query and verify persistence and agent_activity."""
     mock_orchestrator = MagicMock()
     mock_orchestrator.run_intent.return_value = {
         "success": True,
         "agent": "Orchestrator",
         "intent": "STOCK_ANALYSIS",
         "agents_used": ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"],
+        "agent_activity": [
+            {"agent": "StockAgent", "status": "success", "order": 1, "summary": "AAPL market analysis completed"},
+            {"agent": "NewsAgent", "status": "success", "order": 2, "summary": "Financial news sentiment evaluated (positive)"},
+            {"agent": "RiskAgent", "status": "success", "order": 3, "summary": "Risk score evaluated: 30 (low)"},
+            {"agent": "PortfolioAgent", "status": "success", "order": 4, "summary": "Recommendation generated: BUY"},
+        ],
         "asset": "AAPL",
         "asset_type": "stock",
         "market_data": {"market_direction": "bullish"},
@@ -223,7 +229,10 @@ def test_query_endpoint_valid_stock():
         assert data["interpreted"]["asset"] == "AAPL"
         assert data["interpreted"]["intent"] == "STOCK_ANALYSIS"
         assert data["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+        assert len(data["agent_activity"]) == 4
+        assert data["agent_activity"][0]["agent"] == "StockAgent"
         assert data["saved_analysis_id"] == 42
+
 
         mock_orchestrator.run_intent.assert_called_once()
         mock_repo.save_analysis.assert_called_once_with(

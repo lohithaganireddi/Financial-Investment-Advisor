@@ -98,6 +98,7 @@ def analyze_query(
             "query": request.query,
             "intent": interpreted_res.get("intent", "UNSUPPORTED"),
             "agents_used": [],
+            "agent_activity": [],
             "error": interpreted_res.get("error", "Unable to identify a supported financial asset from the query."),
         }
 
@@ -145,9 +146,11 @@ def analyze_query(
             "news_query": interpreted_res.get("news_query"),
         },
         "agents_used": analysis_res.get("agents_used", []),
+        "agent_activity": analysis_res.get("agent_activity", []),
         "analysis": analysis_res,
         "saved_analysis_id": saved_analysis_id,
     }
+
 
 
 @router.get("/history", response_model=HistoryListResponse)

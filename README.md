@@ -59,7 +59,7 @@ FinSight 2.0 uses **deterministic intent-based routing**. When you send a natura
 
 1. **QueryInterpreter** classifies the query into an intent.
 2. **Orchestrator.run_intent()** selects and executes the correct agent pipeline.
-3. Every response includes an **`agents_used`** list showing exactly which agents ran.
+3. Every response includes an **`agents_used`** list and a structured **`agent_activity`** array recording step-by-step execution details (`agent`, `status`, `order`, `summary`).
 
 | Intent | Agents Executed | DB Persist? |
 |--------|----------------|-------------|
@@ -68,7 +68,8 @@ FinSight 2.0 uses **deterministic intent-based routing**. When you send a natura
 | `GENERAL_FINANCIAL_NEWS` | NewsAgent only | ❌ No |
 | `UNSUPPORTED` | None | ❌ No |
 
-This architecture keeps routing logic in one place (the Orchestrator), making it easy to add new intent types in the future.
+This architecture keeps routing logic in one place (the Orchestrator), tracking real-time execution status for the frontend Agent Activity Dashboard.
+
 
 
 

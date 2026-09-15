@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backend API routes and database setup.
 - Frontend UI dashboard development.
 
+## [0.21.0] - 2026-09-15 (Day 21: Agent Activity Tracking)
+
+### Added
+- Updated `Orchestrator.run_intent()` to track structured `agent_activity` for every executed agent step.
+- Each item in `agent_activity` records `agent` name, `status` ("success" or "failed"), `order` (1-based sequence integer), and a short result/error `summary`.
+- Failed steps record status as "failed", include an error summary, and halt execution cleanly.
+- `GENERAL_FINANCIAL_NEWS` records only `NewsAgent`; `UNSUPPORTED` or unknown intents record an empty `agent_activity` list.
+- Preserved existing `agents_used` field alongside `agent_activity`.
+- Updated `backend/schemas.py` with `AgentActivityItem` and `QueryResponse` Pydantic models.
+- Updated `POST /api/query` in `backend/routes.py` to return the new top-level `agent_activity` field.
+- Updated `ResultCard.jsx` in frontend to render a clean "Agent Execution Activity" tracker feed.
+- Updated agent unit tests (`tests/test_agents.py`) and API tests (`tests/test_api.py`) verifying `agent_activity` tracking behavior across all routing paths.
+
 ---
 
 ## [0.20.0] - 2026-09-15 (Day 20: Dynamic Agent Routing)

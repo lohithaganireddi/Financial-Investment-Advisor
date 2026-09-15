@@ -1304,7 +1304,7 @@ def _make_orchestrator_for_intent(
 def test_run_intent_stock_analysis_all_four_agents_called():
     """
     STOCK_ANALYSIS intent must call StockAgent, NewsAgent, RiskAgent, PortfolioAgent.
-    agents_used must contain exactly those four agents in order.
+    agents_used and agent_activity must contain exactly those four agents in order with status 'success'.
     """
     orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
         stock_result=_make_stock_market_data("bullish"),
@@ -1326,6 +1326,14 @@ def test_run_intent_stock_analysis_all_four_agents_called():
     assert result["success"] is True
     assert result["intent"] == "STOCK_ANALYSIS"
     assert result["agents_used"] == ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+    
+    activity = result["agent_activity"]
+    assert len(activity) == 4
+    assert [a["agent"] for a in activity] == ["StockAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+    assert [a["order"] for a in activity] == [1, 2, 3, 4]
+    assert all(a["status"] == "success" for a in activity)
+    assert "AAPL market analysis completed" in activity[0]["summary"]
+
     assert "market_data" in result
     assert "news_data" in result
     assert "risk_data" in result
@@ -1343,7 +1351,7 @@ def test_run_intent_stock_analysis_all_four_agents_called():
 def test_run_intent_crypto_analysis_all_four_agents_called():
     """
     CRYPTO_ANALYSIS intent must call CryptoAgent, NewsAgent, RiskAgent, PortfolioAgent.
-    StockAgent must NOT be called.
+    StockAgent must NOT be called. agent_activity must record all 4 in order.
     """
     crypto_risk = {
         "success": True, "agent": "RiskAgent",
@@ -1379,6 +1387,14 @@ def test_run_intent_crypto_analysis_all_four_agents_called():
     assert result["success"] is True
     assert result["intent"] == "CRYPTO_ANALYSIS"
     assert result["agents_used"] == ["CryptoAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+
+    activity = result["agent_activity"]
+    assert len(activity) == 4
+    assert [a["agent"] for a in activity] == ["CryptoAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+    assert [a["order"] for a in activity] == [1, 2, 3, 4]
+    assert all(a["status"] == "success" for a in activity)
+    assert "bitcoin market analysis completed" in activity[0]["summary"]
+
     assert result["asset"] == "bitcoin"
     assert result["asset_type"] == "crypto"
 
@@ -1393,7 +1409,7 @@ def test_run_intent_general_financial_news_only_news_agent_called():
     """
     GENERAL_FINANCIAL_NEWS must call NewsAgent ONLY.
     StockAgent, CryptoAgent, RiskAgent, PortfolioAgent must NOT be called.
-    agents_used must contain only NewsAgent.
+    agent_activity must contain only NewsAgent.
     """
     orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
         news_result={
@@ -1420,6 +1436,13 @@ def test_run_intent_general_financial_news_only_news_agent_called():
     assert result["success"] is True
     assert result["intent"] == "GENERAL_FINANCIAL_NEWS"
     assert result["agents_used"] == ["NewsAgent"]
+    
+    activity = result["agent_activity"]
+    assert len(activity) == 1
+    assert activity[0]["agent"] == "NewsAgent"
+    assert activity[0]["order"] == 1
+    assert activity[0]["status"] == "success"
+
     assert "news_data" in result
     assert "disclaimer" in result
 
@@ -1433,7 +1456,7 @@ def test_run_intent_general_financial_news_only_news_agent_called():
 def test_run_intent_unsupported_returns_clean_error_no_agents_called():
     """
     UNSUPPORTED intent must return a clean structured error.
-    No financial agents must be called. agents_used must be an empty list.
+    No financial agents must be called. agents_used and agent_activity must be empty lists.
     """
     orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent()
 
@@ -1448,6 +1471,7 @@ def test_run_intent_unsupported_returns_clean_error_no_agents_called():
     assert result["success"] is False
     assert result["intent"] == "UNSUPPORTED"
     assert result["agents_used"] == []
+    assert result["agent_activity"] == []
     assert "error" in result
 
     mock_stock.analyze_stock.assert_not_called()
@@ -1458,13 +1482,14 @@ def test_run_intent_unsupported_returns_clean_error_no_agents_called():
 
 
 def test_run_intent_unknown_intent_no_agents_called():
-    """An unknown intent string must return a clean error; no agents called."""
+    """An unknown intent string must return a clean error; no agents called, agent_activity empty."""
     orch, mock_stock, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent()
 
     result = orch.run_intent({"intent": "FUTURES_TRADING", "success": True})
 
     assert result["success"] is False
     assert result["agents_used"] == []
+    assert result["agent_activity"] == []
     assert "error" in result
     mock_stock.analyze_stock.assert_not_called()
     mock_crypto.analyze_crypto.assert_not_called()
@@ -1474,12 +1499,13 @@ def test_run_intent_unknown_intent_no_agents_called():
 
 
 def test_run_intent_invalid_non_dict_input():
-    """Passing a non-dict to run_intent returns a clean error with agents_used=[]."""
+    """Passing a non-dict to run_intent returns a clean error with agents_used=[] and agent_activity=[]."""
     orch, *_ = _make_orchestrator_for_intent()
     for bad in [None, "string", 42, ["list"]]:
         result = orch.run_intent(bad)
         assert result["success"] is False
         assert result["agents_used"] == []
+        assert result["agent_activity"] == []
         assert "error" in result
 
 
@@ -1498,14 +1524,14 @@ def test_run_intent_stock_response_has_all_standard_keys():
 
     result = orch.run_intent(interpreted)
 
-    for key in ("success", "agent", "intent", "agents_used", "asset", "asset_type",
+    for key in ("success", "agent", "intent", "agents_used", "agent_activity", "asset", "asset_type",
                 "market_data", "news_data", "risk_data", "recommendation", "summary", "disclaimer"):
         assert key in result, f"Missing key in run_intent stock response: {key}"
     assert result["recommendation"]["recommendation"] == "buy"
 
 
 def test_run_intent_general_news_failed_news_agent():
-    """A failing NewsAgent for GENERAL_FINANCIAL_NEWS propagates error; agents_used=['NewsAgent']."""
+    """A failing NewsAgent for GENERAL_FINANCIAL_NEWS propagates error; agents_used=['NewsAgent'], agent_activity recorded as failed."""
     orch, _, _, mock_news, *_ = _make_orchestrator_for_intent(
         news_result={"success": False, "agent": "NewsAgent", "error": "API key missing"}
     )
@@ -1518,13 +1544,19 @@ def test_run_intent_general_news_failed_news_agent():
 
     assert result["success"] is False
     assert result["agents_used"] == ["NewsAgent"]
+    activity = result["agent_activity"]
+    assert len(activity) == 1
+    assert activity[0]["agent"] == "NewsAgent"
+    assert activity[0]["status"] == "failed"
+    assert activity[0]["order"] == 1
+    assert "API key missing" in activity[0]["summary"]
     assert "API key missing" in result["error"]
     mock_news.analyze_news.assert_called_once_with(query="finance")
 
 
 def test_run_intent_stock_failed_market_agent_stops_pipeline():
     """
-    StockAgent failure in STOCK_ANALYSIS: agents_used=[StockAgent].
+    StockAgent failure in STOCK_ANALYSIS: agents_used=[StockAgent], agent_activity records StockAgent failed.
     NewsAgent, RiskAgent, PortfolioAgent are NOT called.
     """
     orch, mock_stock, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
@@ -1539,6 +1571,12 @@ def test_run_intent_stock_failed_market_agent_stops_pipeline():
 
     assert result["success"] is False
     assert result["agents_used"] == ["StockAgent"]
+    activity = result["agent_activity"]
+    assert len(activity) == 1
+    assert activity[0]["agent"] == "StockAgent"
+    assert activity[0]["status"] == "failed"
+    assert activity[0]["order"] == 1
+    assert "API rate limit" in activity[0]["summary"]
     assert result["step"] == "market_agent"
     assert "API rate limit exceeded" in result["error"]
     mock_news.analyze_news.assert_not_called()
@@ -1548,7 +1586,7 @@ def test_run_intent_stock_failed_market_agent_stops_pipeline():
 
 def test_run_intent_stock_news_failure_partial_agents_used():
     """
-    NewsAgent failure in STOCK_ANALYSIS: agents_used=[StockAgent, NewsAgent].
+    NewsAgent failure in STOCK_ANALYSIS: agents_used=[StockAgent, NewsAgent], agent_activity records StockAgent success and NewsAgent failed.
     RiskAgent and PortfolioAgent are NOT called.
     """
     orch, _, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
@@ -1564,9 +1602,17 @@ def test_run_intent_stock_news_failure_partial_agents_used():
 
     assert result["success"] is False
     assert result["agents_used"] == ["StockAgent", "NewsAgent"]
+    activity = result["agent_activity"]
+    assert len(activity) == 2
+    assert activity[0]["status"] == "success"
+    assert activity[1]["agent"] == "NewsAgent"
+    assert activity[1]["status"] == "failed"
+    assert activity[1]["order"] == 2
+    assert "No articles found" in activity[1]["summary"]
     assert result["step"] == "news_agent"
     mock_risk.analyze_risk.assert_not_called()
     mock_portfolio.generate_recommendation.assert_not_called()
+
 
 
 def test_run_intent_intent_constants_match_query_interpreter():

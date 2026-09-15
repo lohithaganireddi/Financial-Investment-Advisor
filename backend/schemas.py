@@ -37,6 +37,27 @@ class QueryRequest(BaseModel):
     )
 
 
+class AgentActivityItem(BaseModel):
+    """Schema representing a single agent's execution activity."""
+    agent: str = Field(..., description="Name of the executed agent", examples=["StockAgent"])
+    status: str = Field(..., description="Execution status: 'success' or 'failed'", examples=["success"])
+    order: int = Field(..., description="Execution order sequence (1-based)", examples=[1])
+    summary: str = Field(..., description="Short summary of execution result or error", examples=["AAPL market analysis completed"])
+
+
+class QueryResponse(BaseModel):
+    """Response payload schema for POST /api/query."""
+    success: bool
+    query: str
+    interpreted: Optional[dict] = None
+    agents_used: List[str] = Field(default_factory=list)
+    agent_activity: List[AgentActivityItem] = Field(default_factory=list)
+    analysis: Optional[dict] = None
+    saved_analysis_id: Optional[int] = None
+    error: Optional[str] = None
+
+
+
 class AnalysisRecordResponse(BaseModel):
     """Schema representing a single stored financial analysis record."""
     model_config = ConfigDict(from_attributes=True)
