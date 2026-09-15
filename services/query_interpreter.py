@@ -1,9 +1,10 @@
 ﻿"""
 Query Interpreter Module
 
-This module implements the QueryInterpreter, which converts simple natural-language
-financial queries into structured inputs required by the Orchestrator.
-Uses deterministic keyword and alias mapping without external LLM dependencies.
+This module implements the QueryInterpreter, which parses natural-language financial queries,
+classifies user intent (STOCK_ANALYSIS, CRYPTO_ANALYSIS, GENERAL_FINANCIAL_NEWS, UNSUPPORTED),
+and extracts asset symbols/IDs for routing to the Orchestrator or News Agent.
+Deterministic implementation without external LLM dependencies.
 """
 
 import re
@@ -12,11 +13,16 @@ from typing import Any, Dict, Optional
 
 class QueryInterpreter:
     """
-    Parses user natural language queries into structured asset analysis requests.
+    Parses and classifies natural language user queries into structured financial analysis requests.
     """
 
-    # Supported Stocks Mapping
-    # Maps keywords/aliases to (symbol, display_name/news_query)
+    # Intent Constants
+    INTENT_STOCK = "STOCK_ANALYSIS"
+    INTENT_CRYPTO = "CRYPTO_ANALYSIS"
+    INTENT_NEWS = "GENERAL_FINANCIAL_NEWS"
+    INTENT_UNSUPPORTED = "UNSUPPORTED"
+
+    # Supported Stocks Mapping: keyword/alias -> (symbol, news_query_name)
     _STOCK_MAP = {
         "apple": ("AAPL", "Apple"),
         "aapl": ("AAPL", "Apple"),
@@ -24,19 +30,18 @@ class QueryInterpreter:
         "msft": ("MSFT", "Microsoft"),
         "tesla": ("TSLA", "Tesla"),
         "tsla": ("TSLA", "Tesla"),
+        "nvidia": ("NVDA", "NVIDIA"),
+        "nvda": ("NVDA", "NVIDIA"),
         "amazon": ("AMZN", "Amazon"),
         "amzn": ("AMZN", "Amazon"),
         "google": ("GOOGL", "Google"),
         "alphabet": ("GOOGL", "Google"),
         "googl": ("GOOGL", "Google"),
         "goog": ("GOOGL", "Google"),
-        "nvidia": ("NVDA", "NVIDIA"),
-        "nvda": ("NVDA", "NVIDIA"),
         "meta": ("META", "Meta"),
     }
 
-    # Supported Cryptocurrencies Mapping
-    # Maps keywords/aliases to (coin_id, display_name/news_query)
+    # Supported Cryptocurrencies Mapping: keyword/alias -> (coin_id, news_query_name)
     _CRYPTO_MAP = {
         "bitcoin": ("bitcoin", "Bitcoin"),
         "btc": ("bitcoin", "Bitcoin"),
@@ -44,20 +49,28 @@ class QueryInterpreter:
         "eth": ("ethereum", "Ethereum"),
         "solana": ("solana", "Solana"),
         "sol": ("solana", "Solana"),
+        "dogecoin": ("dogecoin", "Dogecoin"),
+        "doge": ("dogecoin", "Dogecoin"),
+    }
+
+    # Keywords that indicate general financial news queries (when no specific asset is present)
+    _NEWS_KEYWORDS = {
+        "news", "headline", "headlines", "market", "markets", "financial",
+        "finance", "economy", "economic", "stocks", "crypto"
     }
 
     def interpret(self, query: Any) -> Dict[str, Any]:
         """
-        Interpret a natural language financial query string.
+        Interpret and classify a natural language financial query string.
 
-        :param query: Natural language input string (e.g., "Should I invest in Apple?").
-        :return: Standardized dict with success, asset_type, asset, news_query, original_query,
-                 or an error dict on failure.
+        :param query: Natural language input string (e.g. "Should I invest in Apple?").
+        :return: Dict containing intent, asset_type, asset, news_query, original_query,
+                 and success status.
         """
-        # Validate query type and content
         if not isinstance(query, str):
             return {
                 "success": False,
+                "intent": self.INTENT_UNSUPPORTED,
                 "error": "Query must be a non-empty string."
             }
 
@@ -65,11 +78,11 @@ class QueryInterpreter:
         if not cleaned_query:
             return {
                 "success": False,
+                "intent": self.INTENT_UNSUPPORTED,
                 "error": "Query cannot be empty or whitespace only."
             }
 
-        # Normalize query text by converting to lowercase and stripping special punctuation
-        # Replace non-alphanumeric chars with spaces to easily extract word tokens
+        # Extract word tokens in lowercase
         words = re.findall(r"\b[a-zA-Z0-9]+\b", cleaned_query.lower())
 
         matched_stock = None
@@ -87,36 +100,57 @@ class QueryInterpreter:
                 matched_crypto = self._CRYPTO_MAP[word]
                 break
 
-        # If both or neither match, check ambiguity or missing asset
+        # Handle ambiguous query containing conflicting stock & crypto assets
         if matched_stock and matched_crypto:
-            # Handle potential collision (if both are present in the same query)
-            # Prioritize based on explicit order or return unsupported/ambiguous if conflicting
             return {
                 "success": False,
+                "intent": self.INTENT_UNSUPPORTED,
                 "error": "Ambiguous query containing multiple distinct asset types."
             }
 
+        # Handle Stock Analysis intent
         if matched_stock:
             symbol, news_name = matched_stock
             return {
                 "success": True,
+                "intent": self.INTENT_STOCK,
                 "asset_type": "stock",
                 "asset": symbol,
                 "news_query": news_name,
                 "original_query": cleaned_query
             }
 
+        # Handle Crypto Analysis intent
         if matched_crypto:
             coin_id, news_name = matched_crypto
             return {
                 "success": True,
+                "intent": self.INTENT_CRYPTO,
                 "asset_type": "crypto",
                 "asset": coin_id,
                 "news_query": news_name,
                 "original_query": cleaned_query
             }
 
+        # Handle General Financial News intent (when news/market keywords are present)
+        for word in words:
+            if word in self._NEWS_KEYWORDS:
+                return {
+                    "success": True,
+                    "intent": self.INTENT_NEWS,
+                    "asset_type": None,
+                    "asset": None,
+                    "news_query": "finance",
+                    "original_query": cleaned_query
+                }
+
+        # Handle Unsupported / Unknown Query
         return {
             "success": False,
-            "error": "Unable to identify a supported financial asset from the query."
+            "intent": self.INTENT_UNSUPPORTED,
+            "error": (
+                "Unable to identify a supported asset or intent from the query. "
+                "FinSight 2.0 currently supports stock analysis (Apple, Microsoft, Tesla, Nvidia, Amazon, Google, Meta), "
+                "crypto analysis (Bitcoin, Ethereum, Solana, Dogecoin), and general financial news."
+            )
         }

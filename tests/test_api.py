@@ -294,6 +294,73 @@ def test_query_endpoint_db_failure_does_not_break_analysis():
         app.dependency_overrides.clear()
 
 
+def test_query_endpoint_general_financial_news():
+    """Test POST /api/query with a general financial news query routes to NewsAgent without DB persistence."""
+    mock_orchestrator = MagicMock()
+    mock_orchestrator.news_agent.analyze_news.return_value = {
+        "success": True,
+        "agent": "NewsAgent",
+        "query": "finance",
+        "overall_sentiment": "neutral",
+        "summary": "Markets are mixed today.",
+        "articles": []
+    }
+
+    app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
+
+    try:
+        payload = {"query": "What is happening in the financial market?"}
+        response = client.post("/api/query", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["query"] == "What is happening in the financial market?"
+        assert data["interpreted"]["intent"] == "GENERAL_FINANCIAL_NEWS"
+        assert data["interpreted"]["asset"] is None
+        assert data["interpreted"]["asset_type"] is None
+        assert data["saved_analysis_id"] is None
+        # Orchestrator.run should NOT be called; only news_agent.analyze_news
+        mock_orchestrator.run.assert_not_called()
+        mock_orchestrator.news_agent.analyze_news.assert_called_once()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_query_endpoint_stock_response_includes_intent():
+    """Test POST /api/query with a stock query includes 'intent' field in the interpreted response."""
+    mock_orchestrator = MagicMock()
+    mock_orchestrator.run.return_value = {
+        "success": True,
+        "agent": "Orchestrator",
+        "asset": "TSLA",
+        "asset_type": "stock",
+        "market_data": {"market_direction": "bearish"},
+        "news_data": {"overall_sentiment": "negative"},
+        "risk_data": {"risk_score": 70, "risk_level": "high"},
+        "recommendation": {"recommendation": "avoid", "recommendation_score": 20, "confidence": "medium"}
+    }
+
+    mock_repo = MagicMock()
+    mock_record = MagicMock()
+    mock_record.id = 7
+    mock_repo.save_analysis.return_value = mock_record
+
+    app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
+    app.dependency_overrides[get_repository] = lambda: mock_repo
+
+    try:
+        payload = {"query": "Give me a risk analysis of Tesla"}
+        response = client.post("/api/query", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["interpreted"]["intent"] == "STOCK_ANALYSIS"
+        assert data["interpreted"]["asset"] == "TSLA"
+        assert data["saved_analysis_id"] == 7
+    finally:
+        app.dependency_overrides.clear()
+
+
 # ==========================================
 # History API Endpoints Unit Tests
 # ==========================================

@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.19.0] - 2026-09-15 (Day 19: Query Intent Routing)
+
+### Added
+- Refactored `services/query_interpreter.py` to classify query intent into four categories: `STOCK_ANALYSIS`, `CRYPTO_ANALYSIS`, `GENERAL_FINANCIAL_NEWS`, and `UNSUPPORTED`.
+- Added `intent` field to all `QueryInterpreter.interpret()` response dictionaries.
+- Added Dogecoin (`dogecoin`/`doge`) support to `_CRYPTO_MAP`.
+- Added `_NEWS_KEYWORDS` set for general financial news detection (`news`, `market`, `financial`, `economy`, etc.).
+- Modified `POST /api/query` route in `backend/routes.py` to route `GENERAL_FINANCIAL_NEWS` queries directly to `NewsAgent.analyze_news()` without running the full Orchestrator pipeline or persisting to database.
+- For `GENERAL_FINANCIAL_NEWS`, `saved_analysis_id` is returned as `null` (news summaries are not persisted).
+- `UNSUPPORTED` error message now lists all currently supported assets and intents for user clarity.
+- Rewrote `tests/test_query_interpreter.py` with grouped test functions covering all intents, Dogecoin, case-insensitivity, whitespace, and invalid inputs.
+- Added `test_query_endpoint_general_financial_news` and `test_query_endpoint_stock_response_includes_intent` to `tests/test_api.py` (99 total unit tests passing).
+
+---
+
 ## [0.17.0] - 2026-09-15 (Day 17: Frontend Dashboard Foundation)
 
 ### Added

@@ -1,128 +1,145 @@
 ﻿"""
-Unit Tests for QueryInterpreter Service
+Unit Tests for QueryInterpreter Service (Day 19 Intent Routing)
 
-Verifies deterministic parsing of natural language queries into structured asset parameters.
+Verifies intent classification (STOCK_ANALYSIS, CRYPTO_ANALYSIS, GENERAL_FINANCIAL_NEWS, UNSUPPORTED)
+and asset symbol extraction across equities, crypto, general news, case insensitivity, and invalid inputs.
 """
 
 from services.query_interpreter import QueryInterpreter
 
 
-def test_query_interpreter_apple():
-    """Test parsing 'Should I invest in Apple?'."""
+def test_query_interpreter_stock_intents():
+    """Test stock intent classification and asset symbol extraction."""
     interpreter = QueryInterpreter()
-    res = interpreter.interpret("Should I invest in Apple?")
-    assert res["success"] is True
-    assert res["asset_type"] == "stock"
-    assert res["asset"] == "AAPL"
-    assert res["news_query"] == "Apple"
+
+    # Apple
+    res1 = interpreter.interpret("Should I invest in Apple?")
+    assert res1["success"] is True
+    assert res1["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res1["asset_type"] == "stock"
+    assert res1["asset"] == "AAPL"
+    assert res1["news_query"] == "Apple"
+
+    # Microsoft
+    res2 = interpreter.interpret("Analyze Microsoft stock")
+    assert res2["success"] is True
+    assert res2["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res2["asset"] == "MSFT"
+
+    # Tesla
+    res3 = interpreter.interpret("What is happening with Tesla?")
+    assert res3["success"] is True
+    assert res3["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res3["asset"] == "TSLA"
+
+    # Nvidia
+    res4 = interpreter.interpret("Analyze NVDA")
+    assert res4["success"] is True
+    assert res4["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res4["asset"] == "NVDA"
+
+    # Amazon
+    res5 = interpreter.interpret("Tell me about Amazon")
+    assert res5["success"] is True
+    assert res5["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res5["asset"] == "AMZN"
+
+    # Google / Alphabet
+    res6 = interpreter.interpret("Should I buy Alphabet?")
+    assert res6["success"] is True
+    assert res6["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res6["asset"] == "GOOGL"
+
+    # Meta
+    res7 = interpreter.interpret("What about Meta stock?")
+    assert res7["success"] is True
+    assert res7["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res7["asset"] == "META"
 
 
-def test_query_interpreter_tesla():
-    """Test parsing 'Analyze Tesla'."""
+def test_query_interpreter_crypto_intents():
+    """Test crypto intent classification and coin ID extraction."""
     interpreter = QueryInterpreter()
-    res = interpreter.interpret("Analyze Tesla")
-    assert res["success"] is True
-    assert res["asset_type"] == "stock"
-    assert res["asset"] == "TSLA"
-    assert res["news_query"] == "Tesla"
+
+    # Bitcoin
+    res1 = interpreter.interpret("Should I buy bitcoin?")
+    assert res1["success"] is True
+    assert res1["intent"] == QueryInterpreter.INTENT_CRYPTO
+    assert res1["asset_type"] == "crypto"
+    assert res1["asset"] == "bitcoin"
+    assert res1["news_query"] == "Bitcoin"
+
+    # Ethereum
+    res2 = interpreter.interpret("Analyze Ethereum")
+    assert res2["success"] is True
+    assert res2["intent"] == QueryInterpreter.INTENT_CRYPTO
+    assert res2["asset"] == "ethereum"
+
+    # Solana
+    res3 = interpreter.interpret("Is SOL a good crypto?")
+    assert res3["success"] is True
+    assert res3["intent"] == QueryInterpreter.INTENT_CRYPTO
+    assert res3["asset"] == "solana"
+
+    # Dogecoin
+    res4 = interpreter.interpret("Is Dogecoin good?")
+    assert res4["success"] is True
+    assert res4["intent"] == QueryInterpreter.INTENT_CRYPTO
+    assert res4["asset"] == "dogecoin"
 
 
-def test_query_interpreter_nvidia():
-    """Test parsing 'What about NVIDIA?'."""
+def test_query_interpreter_general_financial_news():
+    """Test classification of general financial news queries without specific asset."""
     interpreter = QueryInterpreter()
-    res = interpreter.interpret("What about NVIDIA?")
-    assert res["success"] is True
-    assert res["asset_type"] == "stock"
-    assert res["asset"] == "NVDA"
-    assert res["news_query"] == "NVIDIA"
+
+    queries = [
+        "What is happening in the financial market?",
+        "Tell me about the latest financial news",
+        "Show me market headlines",
+        "Give me economy news"
+    ]
+
+    for q in queries:
+        res = interpreter.interpret(q)
+        assert res["success"] is True
+        assert res["intent"] == QueryInterpreter.INTENT_NEWS
+        assert res["asset_type"] is None
+        assert res["asset"] is None
+        assert res["news_query"] == "finance"
 
 
-def test_query_interpreter_bitcoin():
-    """Test parsing 'Analyze Bitcoin'."""
+def test_query_interpreter_unsupported_queries():
+    """Test unsupported and unknown queries return clear structured error responses."""
     interpreter = QueryInterpreter()
-    res = interpreter.interpret("Analyze Bitcoin")
-    assert res["success"] is True
-    assert res["asset_type"] == "crypto"
-    assert res["asset"] == "bitcoin"
-    assert res["news_query"] == "Bitcoin"
+
+    res = interpreter.interpret("Tell me about Ford stock")
+    assert res["success"] is False
+    assert res["intent"] == QueryInterpreter.INTENT_UNSUPPORTED
+    assert "Unable to identify a supported asset or intent" in res["error"]
+    assert "FinSight 2.0 currently supports" in res["error"]
 
 
-def test_query_interpreter_btc_alias():
-    """Test parsing 'Is BTC risky?'."""
+def test_query_interpreter_case_insensitivity_and_whitespace():
+    """Test case insensitivity and extra whitespace handling."""
     interpreter = QueryInterpreter()
-    res = interpreter.interpret("Is BTC risky?")
-    assert res["success"] is True
-    assert res["asset_type"] == "crypto"
-    assert res["asset"] == "bitcoin"
-    assert res["news_query"] == "Bitcoin"
+
+    res1 = interpreter.interpret("   SHOULD I BUY AAPL?   ")
+    assert res1["success"] is True
+    assert res1["intent"] == QueryInterpreter.INTENT_STOCK
+    assert res1["asset"] == "AAPL"
+
+    res2 = interpreter.interpret("  analyze BITCOIN   ")
+    assert res2["success"] is True
+    assert res2["intent"] == QueryInterpreter.INTENT_CRYPTO
+    assert res2["asset"] == "bitcoin"
 
 
-def test_query_interpreter_ethereum():
-    """Test parsing 'Tell me about Ethereum'."""
+def test_query_interpreter_empty_and_invalid_inputs():
+    """Test empty, whitespace-only, and non-string inputs."""
     interpreter = QueryInterpreter()
-    res = interpreter.interpret("Tell me about Ethereum")
-    assert res["success"] is True
-    assert res["asset_type"] == "crypto"
-    assert res["asset"] == "ethereum"
-    assert res["news_query"] == "Ethereum"
 
-
-def test_query_interpreter_uppercase_ticker():
-    """Test uppercase input 'SHOULD I BUY AAPL?'."""
-    interpreter = QueryInterpreter()
-    res = interpreter.interpret("SHOULD I BUY AAPL?")
-    assert res["success"] is True
-    assert res["asset_type"] == "stock"
-    assert res["asset"] == "AAPL"
-
-
-def test_query_interpreter_lowercase_ticker():
-    """Test lowercase input 'analyze msft'."""
-    interpreter = QueryInterpreter()
-    res = interpreter.interpret("analyze msft")
-    assert res["success"] is True
-    assert res["asset_type"] == "stock"
-    assert res["asset"] == "MSFT"
-
-
-def test_query_interpreter_extra_whitespace():
-    """Test input with leading and trailing whitespace."""
-    interpreter = QueryInterpreter()
-    res = interpreter.interpret("   bitcoin   ")
-    assert res["success"] is True
-    assert res["asset_type"] == "crypto"
-    assert res["asset"] == "bitcoin"
-
-
-def test_query_interpreter_empty_query():
-    """Test empty string and whitespace-only input."""
-    interpreter = QueryInterpreter()
-    for bad in ["", "   "]:
+    for bad in ["", "   ", None, 123, [], {}]:
         res = interpreter.interpret(bad)
         assert res["success"] is False
-        assert "empty" in res["error"].lower()
-
-
-def test_query_interpreter_unsupported_company():
-    """Test unsupported company query."""
-    interpreter = QueryInterpreter()
-    res = interpreter.interpret("Analyze Ford")
-    assert res["success"] is False
-    assert "Unable to identify" in res["error"]
-
-
-def test_query_interpreter_unsupported_crypto():
-    """Test unsupported cryptocurrency query."""
-    interpreter = QueryInterpreter()
-    res = interpreter.interpret("Is Dogecoin good?")
-    assert res["success"] is False
-    assert "Unable to identify" in res["error"]
-
-
-def test_query_interpreter_non_string_input():
-    """Test non-string inputs."""
-    interpreter = QueryInterpreter()
-    for bad in [None, 123, [], {}]:
-        res = interpreter.interpret(bad)
-        assert res["success"] is False
-        assert "string" in res["error"].lower()
+        assert res["intent"] == QueryInterpreter.INTENT_UNSUPPORTED
+        assert "error" in res

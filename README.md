@@ -47,7 +47,7 @@ The backend provides a FastAPI service with local SQLite persistence (`smartfina
 - **`GET /`** – API status and documentation link.
 - **`GET /health`** – Backend service health check.
 - **`POST /api/analyze`** – Direct multi-agent asset analysis endpoint.
-- **`POST /api/query`** – Natural language query analysis & automatic database persistence.
+- **`POST /api/query`** – Natural language query analysis with **intent routing**: stock and crypto queries run the full multi-agent pipeline and persist to database; general financial news queries (`"What's happening in the market?"`) are routed directly to the News Agent without DB persistence. Returns `intent` field (`STOCK_ANALYSIS`, `CRYPTO_ANALYSIS`, `GENERAL_FINANCIAL_NEWS`, or `UNSUPPORTED`).
 - **`GET /api/history`** – Retrieve recent saved financial asset analyses (limit 1 to 50).
 - **`GET /api/history/{id}`** – Retrieve a specific saved analysis record by ID.
 

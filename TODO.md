@@ -47,9 +47,11 @@
 - [x] Define API request/response schemas in `backend/schemas.py`.
 - [x] Create REST endpoint for financial analysis (`POST /api/analyze`).
 - [x] Implement natural language query interpretation layer (`services/query_interpreter.py`) and `POST /api/query` endpoint.
-- [ ] Setup database models (SQLAlchemy / Alembic) for storing portfolios and search history.
+- [x] Setup database models (SQLAlchemy) for storing search history (`backend/models.py`, `backend/database.py`).
+- [x] Implement query intent classification (STOCK_ANALYSIS, CRYPTO_ANALYSIS, GENERAL_FINANCIAL_NEWS, UNSUPPORTED) with Dogecoin support and news-only routing.
 - [ ] Implement user authentication (JWT tokens / passwords).
 - [x] Write backend endpoint tests in `tests/test_api.py`.
+
 
 
 ---
