@@ -1,13 +1,18 @@
 """
 Unit tests for AI Agent Modules
 
-Verifies StockAgent input validation, service integration, market direction evaluation,
+Verifies StockAgent and CryptoAgent input validation, service integration, market direction evaluation,
 and percentage parsing using mock services without live network calls.
 """
 
 from unittest.mock import MagicMock
 from agents.stock_agent import StockAgent
+from agents.crypto_agent import CryptoAgent
 
+
+# ==========================================
+# StockAgent Unit Tests
+# ==========================================
 
 def test_stock_agent_invalid_symbols():
     """Test that invalid symbol inputs return an error dictionary."""
@@ -140,4 +145,143 @@ def test_stock_agent_dependency_injection():
     mock_service.get_stock_quote.return_value = {"success": False, "error": "Mocked call"}
 
     agent = StockAgent(service=mock_service)
+    assert agent.service == mock_service
+
+
+# ==========================================
+# CryptoAgent Unit Tests
+# ==========================================
+
+def test_crypto_agent_invalid_coin_id():
+    """Test that invalid coin ID inputs return an error dictionary."""
+    agent = CryptoAgent(service=MagicMock())
+
+    res1 = agent.analyze_crypto("")
+    assert res1["success"] is False
+    assert "Invalid cryptocurrency coin ID" in res1["error"]
+
+    res2 = agent.analyze_crypto("   ")
+    assert res2["success"] is False
+    assert "Invalid cryptocurrency coin ID" in res2["error"]
+
+
+def test_crypto_agent_bullish_analysis():
+    """Test CryptoAgent evaluation of a bullish cryptocurrency quote."""
+    mock_service = MagicMock()
+    mock_service.get_crypto_price.return_value = {
+        "success": True,
+        "data": {
+            "id": "bitcoin",
+            "symbol": "BTC",
+            "name": "Bitcoin",
+            "price": 65000.00,
+            "high_24h": 66500.00,
+            "low_24h": 64200.00,
+            "change_percent_24h": 2.15,
+            "market_cap": 1280000000000,
+            "volume_24h": 35000000000.0,
+            "last_updated": "2026-09-15T12:00:00.000Z"
+        }
+    }
+
+    agent = CryptoAgent(service=mock_service)
+    result = agent.analyze_crypto(" BITCOIN ")
+
+    assert result["success"] is True
+    assert result["agent"] == "CryptoAgent"
+    assert result["coin_id"] == "bitcoin"
+    assert result["symbol"] == "BTC"
+    assert result["name"] == "Bitcoin"
+    assert result["price"] == 65000.00
+    assert result["change_percent_24h"] == 2.15
+    assert result["market_direction"] == "bullish"
+    assert "bullish momentum" in result["analysis"]
+    assert result["details"]["market_cap"] == 1280000000000
+    mock_service.get_crypto_price.assert_called_once_with("bitcoin")
+
+
+def test_crypto_agent_bearish_analysis():
+    """Test CryptoAgent evaluation of a bearish cryptocurrency quote."""
+    mock_service = MagicMock()
+    mock_service.get_crypto_price.return_value = {
+        "success": True,
+        "data": {
+            "id": "ethereum",
+            "symbol": "ETH",
+            "name": "Ethereum",
+            "price": 3400.00,
+            "high_24h": 3550.00,
+            "low_24h": 3380.00,
+            "change_percent_24h": -3.50,
+            "market_cap": 400000000000,
+            "volume_24h": 15000000000.0,
+            "last_updated": "2026-09-15T12:00:00.000Z"
+        }
+    }
+
+    agent = CryptoAgent(service=mock_service)
+    result = agent.analyze_crypto("ETHEREUM")
+
+    assert result["success"] is True
+    assert result["coin_id"] == "ethereum"
+    assert result["symbol"] == "ETH"
+    assert result["price"] == 3400.00
+    assert result["change_percent_24h"] == -3.50
+    assert result["market_direction"] == "bearish"
+    assert "bearish pressure" in result["analysis"]
+
+
+def test_crypto_agent_neutral_analysis():
+    """Test CryptoAgent evaluation of a neutral cryptocurrency quote."""
+    mock_service = MagicMock()
+    mock_service.get_crypto_price.return_value = {
+        "success": True,
+        "data": {
+            "id": "tether",
+            "symbol": "USDT",
+            "name": "Tether",
+            "price": 1.00,
+            "high_24h": 1.001,
+            "low_24h": 0.999,
+            "change_percent_24h": 0.00,
+            "market_cap": 110000000000,
+            "volume_24h": 50000000000.0,
+            "last_updated": "2026-09-15T12:00:00.000Z"
+        }
+    }
+
+    agent = CryptoAgent(service=mock_service)
+    result = agent.analyze_crypto("tether")
+
+    assert result["success"] is True
+    assert result["coin_id"] == "tether"
+    assert result["price"] == 1.00
+    assert result["change_percent_24h"] == 0.00
+    assert result["market_direction"] == "neutral"
+    assert "neutral sideways price action" in result["analysis"]
+
+
+def test_crypto_agent_unconfigured_service_error():
+    """Test that CryptoAgent propagates service configuration errors gracefully."""
+    mock_service = MagicMock()
+    mock_service.get_crypto_price.return_value = {
+        "success": False,
+        "error": "Missing or unconfigured CoinGecko API key. Please set COINGECKO_API_KEY in your .env file."
+    }
+
+    agent = CryptoAgent(service=mock_service)
+    result = agent.analyze_crypto("bitcoin")
+
+    assert result["success"] is False
+    assert result["agent"] == "CryptoAgent"
+    assert result["coin_id"] == "bitcoin"
+    assert "Missing or unconfigured CoinGecko API key" in result["error"]
+
+
+def test_crypto_agent_dependency_injection():
+    """Verify that dependency injection works and default service instantiates cleanly."""
+    mock_service = MagicMock()
+    mock_service.get_crypto_price.return_value = {"success": False, "error": "Mocked call"}
+
+    agent = CryptoAgent(service=mock_service)
     assert agent.service == mock_service

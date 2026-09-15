@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-09-15 (Day 7: Cryptocurrency Agent Module)
+
+### Added
+- Created `agents/crypto_agent.py` implementing `CryptoAgent` using dependency injection with `CoinGeckoService`.
+- Implemented coin ID validation/lowercase normalization (`" BITCOIN "` -> `"bitcoin"`), 24h market direction evaluation (`bullish`, `bearish`, `neutral`), and text analysis synthesis.
+- Exported `CryptoAgent` from `agents/__init__.py`.
+- Updated `tests/test_agents.py` with 6 new mock unit tests for `CryptoAgent` (30 total unit tests passing).
+- Updated `TODO.md` tracking Phase 3 progress.
+
+---
+
 ## [0.6.0] - 2026-09-15 (Day 6: Stock Price Agent Module)
 
 ### Added
