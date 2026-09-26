@@ -6,7 +6,9 @@ and orchestrator interaction.
 """
 
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
+import json
+from datetime import datetime, timezone
 from backend.schemas import (
     AnalyzeRequest,
     QueryRequest,
@@ -29,6 +31,7 @@ from services.backtest_engine import BacktestEngine
 from services.user_repository import UserRepository
 from services.auth_service import AuthService
 from services.llm_service import LLMService
+from services.ticker_streamer import TickerStreamManager
 
 router = APIRouter(prefix="/api", tags=["Analysis"])
 
@@ -39,6 +42,7 @@ _default_repository = AnalysisRepository()
 _default_backtest_engine = BacktestEngine()
 _default_user_repository = UserRepository()
 _default_llm_service = LLMService()
+_default_stream_manager = TickerStreamManager()
 
 
 def get_orchestrator() -> Orchestrator:
@@ -69,6 +73,12 @@ def get_user_repository() -> UserRepository:
 def get_llm_service() -> LLMService:
     """Dependency provider for LLMService instance, easily overridable in tests."""
     return _default_llm_service
+
+
+def get_stream_manager() -> TickerStreamManager:
+    """Dependency provider for TickerStreamManager instance, easily overridable in tests."""
+    return _default_stream_manager
+
 
 
 
@@ -444,6 +454,61 @@ def synthesize_llm_reasoning(
             detail=result.get("error", "LLM reasoning synthesis failed.")
         )
     return result
+
+
+@router.websocket("/ws/ticker")
+async def websocket_ticker_endpoint(
+    websocket: WebSocket,
+    stream_manager: TickerStreamManager = Depends(get_stream_manager)
+):
+    """
+    Real-Time WebSocket Ticker Streaming Endpoint.
+
+    Handles WebSocket client connections, client subscriptions, periodic price updates,
+    ping/pong heartbeat checks, and clean disconnection handling.
+    """
+    await stream_manager.connect(websocket)
+    try:
+        while True:
+            data_text = await websocket.receive_text()
+            try:
+                msg = json.loads(data_text)
+            except Exception:
+                await stream_manager.send_json(websocket, {
+                    "type": "error",
+                    "error": "Invalid JSON payload."
+                })
+                continue
+
+            action = str(msg.get("action", "")).lower()
+
+            if action == "ping":
+                await stream_manager.send_json(websocket, {
+                    "type": "pong",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            elif action == "subscribe":
+                asset_type = msg.get("asset_type", "stock")
+                symbol = msg.get("symbol", "AAPL")
+                stream_manager.subscribe(websocket, asset_type, symbol)
+
+                # Send initial price quote payload immediately upon subscription
+                quote = stream_manager.fetch_ticker_quote(asset_type, symbol)
+                await stream_manager.send_json(websocket, quote)
+            elif action == "unsubscribe":
+                asset_type = msg.get("asset_type", "stock")
+                symbol = msg.get("symbol", "AAPL")
+                stream_manager.unsubscribe(websocket, asset_type, symbol)
+                await stream_manager.send_json(websocket, {
+                    "type": "unsubscribed",
+                    "asset_type": asset_type,
+                    "symbol": symbol
+                })
+    except WebSocketDisconnect:
+        stream_manager.disconnect(websocket)
+    except Exception:
+        stream_manager.disconnect(websocket)
+
 
 
 

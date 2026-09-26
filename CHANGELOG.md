@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-26 (Day 39: Real-Time Data Streaming & WebSocket Ticker Engine)
+
+### Added
+- **WebSocket Streaming Manager**: Created `services/ticker_streamer.py` (`TickerStreamManager`) managing active WebSocket connections, multi-asset client subscriptions (`stock:AAPL`, `crypto:bitcoin`), bi-directional broadcast updates, and safe connection error handling.
+- **WebSocket Ticker Endpoint**: Implemented `WS /api/ws/ticker` in `backend/routes.py` supporting `subscribe`, `unsubscribe`, `ping/pong`, and immediate quote updates.
+- **Real-Time Frontend Ticker Component**: Built `frontend/src/components/LiveTickerStream.jsx` and embedded it into `frontend/src/pages/Home.jsx` displaying connection status indicators (`CONNECTED`, `CONNECTING`, `DISCONNECTED`), live price updates, percentage change badges, and subscription controls.
+- **WebSocket Test Suite**: Added `tests/test_websockets.py` bringing total passing backend test suite from 176 to 181 tests.
+
 ## [1.8.0] - 2026-09-26 (Day 38: LLM & Autonomous Financial Reasoning Integration Layer)
 
 ### Added

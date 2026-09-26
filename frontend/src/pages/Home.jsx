@@ -15,6 +15,7 @@ import { useFinancial } from '../context/FinancialContext';
 import AnalysisForm from '../components/AnalysisForm';
 import ResultCard from '../components/ResultCard';
 import HistoryList from '../components/HistoryList';
+import LiveTickerStream from '../components/LiveTickerStream';
 
 export default function Home() {
   const {
@@ -91,6 +92,9 @@ export default function Home() {
           </p>
         </div>
       </div>
+
+      {/* Real-Time WebSocket Ticker Streaming Feed */}
+      <LiveTickerStream />
 
       {/* Analysis Form Component */}
       <AnalysisForm
