@@ -1,6 +1,6 @@
 # SmartFinancial Advisor (FinSight 2.0) 🚀
 
-Welcome to **SmartFinancial Advisor (FinSight 2.0)**! A deterministic, decision-driven multi-agent financial intelligence system that coordinates specialized AI agents to analyze stocks, cryptocurrency, and market news to deliver actionable portfolio recommendations and risk assessments.
+Welcome to **SmartFinancial Advisor (FinSight 2.0)**! A deterministic, decision-driven multi-agent financial intelligence system that coordinates specialized AI agents to analyze stocks, cryptocurrency, and market news to deliver actionable portfolio recommendations, risk assessments, real-time ticker streaming, multi-turn LLM financial assistance, and print-ready executive reports.
 
 ---
 
@@ -22,12 +22,13 @@ FinSight 2.0 turns complex financial queries into clear, structured insights by 
 - ⚠️ **Composite Risk Assessment**: Rule-based risk scoring incorporating price movement volatility, market direction, and asset type premiums.
 - 💼 **Automated Portfolio Recommendations**: Synthesized `BUY`, `HOLD`, or `AVOID` guidance with confidence metrics and decision factors.
 - 🔀 **Intent-Based Query Routing**: Natural language interpretation supporting equity tickers (`$AAPL`, `Tesla`), crypto coins (`Bitcoin`, `Solana`), news requests, and ambiguity detection.
-- 📊 **Agent Telemetry & Activity Dashboard**: Step-by-step pipeline execution tracking (`agents_used`, duration timing, step status, decision rationales).
-- 💾 **Historical Analysis Persistence**: Automatic storage of search queries, risk scores, recommendations, and execution telemetry in SQLite.
-- 🖥️ **Multi-Page React Frontend**: 10 distinct pages including Dashboard, Stock Analysis, Crypto Analysis, News, Risk Dashboard, Portfolio Advisor, Agent Activity, Analytics, History, and Settings.
-- ⚡ **Real-Time Data Streaming**: WebSockets ticker engine providing live price updates.
-- 🤖 **LLM Reasoning Layer**: Hybrid LLM reasoning synthesis with fallback options.
-- 🐳 **Dockerization & CI/CD Pipeline**: Multi-container Docker orchestration and GitHub Actions CI workflow.
+- 🔒 **User Authentication & Data Privacy**: JWT authentication with user registration, secure login, protected routes (`ProtectedRoute`), and user-isolated analysis history and watchlists.
+- 👁️ **Watchlist Live Monitoring**: Real-time price tracking via WebSockets with target price alert badges and instant AI analysis triggers.
+- 💬 **Multi-Turn Conversational LLM Assistant**: Context-grounded multi-turn financial Q&A (`LLMChatAssistant`) powered by hybrid provider synthesis with offline fallback.
+- 📊 **System Telemetry & Performance Monitoring**: Pipeline latency tracking, request volume, health indicators, intent distribution, and per-agent execution statistics.
+- 📄 **Executive Financial Report Exporter**: One-click structured JSON payload export and print-ready HTML executive financial report generation (printable or saveable as PDF via browser print-to-PDF).
+- 🎲 **Monte Carlo Backtesting Engine**: Portfolio simulation engine computing Sharpe ratio, Value at Risk (VaR 95%), max drawdown, and trajectory percentiles.
+- 🐳 **Production-Ready Docker & CI/CD Setup**: Multi-container Docker orchestration (FastAPI + Nginx SPA reverse proxy) and GitHub Actions CI workflow.
 
 ---
 
@@ -92,21 +93,23 @@ smartfinance_agenticai/
 │   ├── query_interpreter.py    # Natural language intent classifier & parser
 │   ├── backtest_engine.py      # Monte Carlo simulation engine
 │   ├── auth_service.py         # JWT & Password authentication service
-│   ├── llm_service.py          # LLM reasoning synthesis service
+│   ├── llm_service.py          # LLM reasoning & chat synthesis service
 │   ├── ticker_streamer.py      # WebSocket real-time ticker stream manager
+│   ├── telemetry_service.py    # System performance telemetry manager
+│   ├── export_service.py       # JSON payload & HTML report export generator
 │   ├── user_repository.py      # User & Watchlist CRUD repository
 │   └── analysis_repository.py  # Database CRUD repository
 ├── frontend/                   # React + Vite Frontend Application
 │   ├── src/
-│   │   ├── components/         # Header, Sidebar, AgentDashboard, ResultCard, LiveTickerStream, etc.
-│   │   ├── context/            # FinancialContext API state provider
-│   │   ├── pages/              # 10 Application Pages
-│   │   ├── App.jsx             # Main Router Layout
+│   │   ├── components/         # Header, Sidebar, AgentDashboard, ResultCard, LiveTickerStream, WatchlistWidget, LLMChatAssistant, ExportReportModal, ProtectedRoute
+│   │   ├── context/            # AuthContext & FinancialContext API state providers
+│   │   ├── pages/              # 11 Application Pages (Home, Stock, Crypto, News, Risk, Portfolio, Agents, Analytics, History, Settings, Login)
+│   │   ├── App.jsx             # Main Router Layout & Auth Protection
 │   │   └── index.css           # Global stylesheet & design system
 │   ├── nginx.conf              # Production Nginx reverse proxy configuration
 │   ├── Dockerfile              # Multi-stage frontend Dockerfile
 │   └── package.json            # Frontend dependencies & scripts
-├── tests/                      # Automated Unit & Integration Tests
+├── tests/                      # Automated Unit & Integration Tests (191 tests)
 ├── Dockerfile                  # Backend Python Dockerfile
 ├── docker-compose.yml          # Multi-container orchestration specification
 ├── .dockerignore               # Docker build exclusions
@@ -115,7 +118,8 @@ smartfinance_agenticai/
 ├── CHANGELOG.md                # Version history & milestone records
 ├── PROJECT_PLAN.md             # Architecture overview & development roadmap
 ├── README.md                   # Project documentation (You are here!)
-└── TODO.md                     # Development task list
+├── TODO.md                     # Development task list
+└── requirements.txt            # Python dependencies
 ```
 
 ---
@@ -128,7 +132,7 @@ smartfinance_agenticai/
 
 ---
 
-### 🐳 Option A: Production Docker Deployment (Recommended)
+### 🐳 Option A: Production Docker Container Deployment (Recommended)
 
 1. **Clone repository & prepare environment**:
    ```bash
@@ -173,13 +177,13 @@ smartfinance_agenticai/
 
 ---
 
-## 🧪 Testing
+## 🧪 Testing & Verification
 
 Run backend Pytest suite:
 ```bash
 .\venv\Scripts\pytest.exe
 ```
-*Verification: 181 unit & integration tests passing.*
+*Verification: 191 unit & integration tests passing.*
 
 Run frontend production build verification:
 ```bash
