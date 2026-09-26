@@ -13,9 +13,14 @@ import {
   Settings,
   X,
   Sparkles,
+  LogOut,
+  User
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
+  const { user, logout } = useAuth();
+
   const handleNavClick = () => {
     if (mobileOpen && setMobileOpen) {
       setMobileOpen(false);
@@ -112,7 +117,41 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
           ))}
         </nav>
 
-        <div className="sidebar-footer">
+        <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {user && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.4rem 0.6rem',
+                borderRadius: '6px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                fontSize: '0.8rem',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--text-main)' }}>
+                <User size={14} color="#60a5fa" />
+                {user.username}
+              </span>
+              <button
+                onClick={logout}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '2px',
+                }}
+                title="Log Out"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          )}
           <div className="version-chip">v0.26.0 • Agentic AI</div>
         </div>
       </aside>

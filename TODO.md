@@ -203,4 +203,17 @@
 - [x] Verify backend pytest test suite (181 passed).
 - [x] Verify frontend production build (`npm run build`).
 
+---
+
+## Day 41: Frontend User Authentication Architecture & Route Protection Guards (Completed ✅)
+- [x] Create `frontend/src/context/AuthContext.jsx` (`AuthProvider`) providing global authentication state (`user`, `token`, `loading`), token persistence (`sf_access_token`), automatic session restoration (`GET /api/auth/me`), and global `login()`, `register()`, and `logout()` handlers.
+- [x] Create `frontend/src/pages/Login.jsx` dedicated login and registration page with tabs, error banners, loading indicators, and post-authentication route redirection.
+- [x] Create `frontend/src/components/ProtectedRoute.jsx` route guard enforcing authentication on private routes, showing session restoration loader, and redirecting unauthenticated users to `/login`.
+- [x] Update `frontend/src/App.jsx` wrapping app with `AuthProvider`, adding public `/login` route, and securing all application pages under `ProtectedRoute`.
+- [x] Update `frontend/src/pages/Settings.jsx` to consume `useAuth()` state while preserving watchlist management features.
+- [x] Update `frontend/src/components/Header.jsx` and `frontend/src/components/Sidebar.jsx` to render active user chips and quick logout actions.
+- [x] Verify backend pytest test suite (181 passed).
+- [x] Verify frontend production build (`npm run build`).
+
+
 

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-26 (Day 41: Frontend User Authentication Architecture & Route Protection)
+
+### Added
+- **Global AuthContext Provider**: Created `frontend/src/context/AuthContext.jsx` (`AuthProvider`) providing global authentication state (`user`, `token`, `loading`), automatic JWT token initialization from `localStorage` (`sf_access_token`), background session restoration via `GET /api/auth/me`, and global `login()`, `register()`, and `logout()` methods.
+- **Dedicated Login & Registration UI**: Created `frontend/src/pages/Login.jsx` providing tabbed login and registration forms with validation, error alert banners, loading state spinners, and automatic post-authentication redirection.
+- **Route Protection Guard**: Created `frontend/src/components/ProtectedRoute.jsx` component protecting all private application routes (`/`, `/stocks`, `/crypto`, `/news`, `/risk`, `/portfolio`, `/agents`, `/analytics`, `/history`, `/settings`), displaying a session restoration loader during token check, and redirecting unauthenticated visitors to `/login` while preserving return paths.
+- **Refactored Settings & Header Navigation**: Updated `frontend/src/pages/Settings.jsx` to consume global `useAuth()` state while preserving user security info and watchlist CRUD preferences. Updated `Header.jsx` and `Sidebar.jsx` to render active user chips and instant session logout buttons.
+
 ## [2.0.0] - 2026-09-26 (Day 40: Dockerization, CI/CD Pipeline & Production Cloud Deployment Setup)
 
 ### Added

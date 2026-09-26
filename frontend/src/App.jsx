@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import { FinancialProvider, useFinancial } from './context/FinancialContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 
+import Login from './pages/Login';
 import Home from './pages/Home';
 import StockAnalysis from './pages/StockAnalysis';
 import CryptoAnalysis from './pages/CryptoAnalysis';
@@ -50,19 +53,7 @@ function MainLayout() {
         )}
 
         <main className="main-body">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/stocks" element={<StockAnalysis />} />
-            <Route path="/crypto" element={<CryptoAnalysis />} />
-            <Route path="/news" element={<FinancialNews />} />
-            <Route path="/risk" element={<RiskDashboard />} />
-            <Route path="/portfolio" element={<PortfolioAdvisor />} />
-            <Route path="/agents" element={<AgentActivity />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/history" element={<AnalysisHistory />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Outlet />
         </main>
       </div>
     </div>
@@ -72,9 +63,30 @@ function MainLayout() {
 export default function App() {
   return (
     <BrowserRouter>
-      <FinancialProvider>
-        <MainLayout />
-      </FinancialProvider>
+      <AuthProvider>
+        <FinancialProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            
+            <Route element={<ProtectedRoute />}>
+              <Route element={<MainLayout />}>
+                <Route path="/" element={<Home />} />
+                <Route path="/stocks" element={<StockAnalysis />} />
+                <Route path="/crypto" element={<CryptoAnalysis />} />
+                <Route path="/news" element={<FinancialNews />} />
+                <Route path="/risk" element={<RiskDashboard />} />
+                <Route path="/portfolio" element={<PortfolioAdvisor />} />
+                <Route path="/agents" element={<AgentActivity />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/history" element={<AnalysisHistory />} />
+                <Route path="/settings" element={<Settings />} />
+              </Route>
+            </Route>
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </FinancialProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

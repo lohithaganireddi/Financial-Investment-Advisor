@@ -1,29 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import {
   Settings as SettingsIcon,
-  User,
-  Sliders,
   Database,
-  Info,
   CheckCircle2,
-  Lock,
   LogOut,
   Star,
   Plus,
   Trash2,
   ShieldCheck,
-  AlertCircle
+  User as UserIcon
 } from 'lucide-react';
 
 export default function Settings() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('sf_access_token') || '');
-  const [authMode, setAuthMode] = useState('login'); // login or register
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authMsg, setAuthMsg] = useState(null);
-  const [authError, setAuthError] = useState(null);
+  const { user: currentUser, token, logout } = useAuth();
 
   // Watchlist State
   const [watchlist, setWatchlist] = useState([]);
@@ -33,25 +23,8 @@ export default function Settings() {
   const [newNotes, setNewNotes] = useState('');
 
   useEffect(() => {
-    fetchProfile();
     fetchWatchlist();
   }, [token]);
-
-  const fetchProfile = async () => {
-    try {
-      const resp = await fetch('/api/auth/me', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.success && data.user) {
-          setCurrentUser(data.user);
-        }
-      }
-    } catch (err) {
-      console.warn('Could not fetch user profile:', err);
-    }
-  };
 
   const fetchWatchlist = async () => {
     try {
@@ -67,48 +40,6 @@ export default function Settings() {
     } catch (err) {
       console.warn('Could not fetch user watchlist:', err);
     }
-  };
-
-  const handleAuthSubmit = async (e) => {
-    e.preventDefault();
-    setAuthMsg(null);
-    setAuthError(null);
-
-    const endpoint = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
-    const payload = authMode === 'register'
-      ? { username, email, password }
-      : { username, password };
-
-    try {
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await resp.json();
-      if (!resp.ok) {
-        setAuthError(data.detail || 'Authentication failed.');
-      } else {
-        localStorage.setItem('sf_access_token', data.access_token);
-        setToken(data.access_token);
-        setCurrentUser(data.user);
-        setAuthMsg(authMode === 'register' ? 'Account created successfully!' : 'Logged in successfully!');
-        setUsername('');
-        setEmail('');
-        setPassword('');
-      }
-    } catch (err) {
-      setAuthError(`Authentication error: ${err.message}`);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('sf_access_token');
-    setToken('');
-    setCurrentUser(null);
-    setWatchlist([]);
-    setAuthMsg('Logged out of local session.');
   };
 
   const handleAddWatchlist = async (e) => {
@@ -175,40 +106,29 @@ export default function Settings() {
           <div className="card-title" style={{ justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <ShieldCheck size={20} color="#3b82f6" />
-              User Authentication & Security Profile
+              User Security & Profile Information
             </div>
             {currentUser && (
               <span className="status-badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#34d399', fontSize: '0.75rem' }}>
-                <CheckCircle2 size={12} /> JWT Auth Active
+                <CheckCircle2 size={12} /> JWT Auth Session Active
               </span>
             )}
           </div>
 
-          {authMsg && (
-            <div className="info-box" style={{ borderColor: 'rgba(16, 185, 129, 0.4)', color: '#34d399', marginBottom: '1rem' }}>
-              <CheckCircle2 size={16} /> <span>{authMsg}</span>
-            </div>
-          )}
-          {authError && (
-            <div className="info-box" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', marginBottom: '1rem' }}>
-              <AlertCircle size={16} /> <span>{authError}</span>
-            </div>
-          )}
-
           {currentUser ? (
             <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '1.25rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-              <div className="form-grid" style={{ marginBottom: '1rem' }}>
+              <div className="form-grid" style={{ marginBottom: '1.25rem' }}>
                 <div className="form-group">
                   <label className="form-label">Username</label>
-                  <input type="text" className="form-input" value={currentUser.username} readOnly />
+                  <input type="text" className="form-input" value={currentUser.username || ''} readOnly />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email</label>
-                  <input type="text" className="form-input" value={currentUser.email} readOnly />
+                  <input type="text" className="form-input" value={currentUser.email || 'N/A'} readOnly />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Role</label>
-                  <input type="text" className="form-input" value={currentUser.role?.toUpperCase()} readOnly />
+                  <input type="text" className="form-input" value={(currentUser.role || 'ANALYST').toUpperCase()} readOnly />
                 </div>
                 <div className="form-group">
                   <label className="form-label">User ID</label>
@@ -217,76 +137,15 @@ export default function Settings() {
               </div>
 
               <button
-                onClick={handleLogout}
+                onClick={logout}
                 className="tab-btn"
-                style={{ color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0.4rem 0.9rem' }}
+                style={{ color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0.5rem 1rem', cursor: 'pointer' }}
               >
-                <LogOut size={14} /> Log Out Session
+                <LogOut size={14} /> Log Out Active Session
               </button>
             </div>
           ) : (
-            <div>
-              <div className="tabs" style={{ marginBottom: '1rem' }}>
-                <button
-                  className={`tab-btn ${authMode === 'login' ? 'active' : ''}`}
-                  onClick={() => setAuthMode('login')}
-                >
-                  Log In
-                </button>
-                <button
-                  className={`tab-btn ${authMode === 'register' ? 'active' : ''}`}
-                  onClick={() => setAuthMode('register')}
-                >
-                  Register Account
-                </button>
-              </div>
-
-              <form onSubmit={handleAuthSubmit} className="form-grid">
-                <div className="form-group">
-                  <label className="form-label">Username</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Enter username"
-                    required
-                  />
-                </div>
-
-                {authMode === 'register' && (
-                  <div className="form-group">
-                    <label className="form-label">Email Address</label>
-                    <input
-                      type="email"
-                      className="form-input"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="analyst@smartfinance.com"
-                      required
-                    />
-                  </div>
-                )}
-
-                <div className="form-group">
-                  <label className="form-label">Password</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-
-                <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <button type="submit" className="btn-primary" style={{ width: '100%', padding: '0.65rem' }}>
-                    <Lock size={14} /> {authMode === 'register' ? 'Create Account' : 'Log In'}
-                  </button>
-                </div>
-              </form>
-            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No active user session detected.</p>
           )}
         </div>
 
