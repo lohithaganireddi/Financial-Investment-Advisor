@@ -88,7 +88,19 @@
 
 ---
 
-## Future Phase: Advanced Development Roadmap (Days 31 – 45)
+## Day 31: Stronger Agentic AI Intelligence (Completed ✅)
+- [x] Enhance `AnalysisContext` with evolving decision state fields (`market_summary`, `news_summary`, `risk_summary`, `recommendation_summary`, `decision_flags`, `confidence_factors`).
+- [x] Add deterministic decision flag helper `update_decision_flags()` on `AnalysisContext`.
+- [x] Make `RiskAgent` context-aware with optional `news_data` sentiment adjustment (+10 negative, -5 positive) and honest failure handling notes.
+- [x] Make `PortfolioAgent` context-aware with structured signal factors (`positive market signal`, `negative news signal`, `elevated risk`) and explainable confidence logic.
+- [x] Improve `Orchestrator` decision flow with `ctx.decisions` decision traces and dynamic, explainable decision rationales in `agent_activity`.
+- [x] Add Day 31 unit test suite covering bullish/bearish flows, news failure blocking, RiskAgent news adjustments, unsupported queries, and crypto workflows (146 total tests passing).
+- [x] Verify frontend build (`npm run build`).
+- [x] Perform live query verification for equity, crypto, news, and unsupported prompts.
+
+---
+
+## Future Phase: Advanced Development Roadmap (Days 32 – 45)
 - [ ] LLM & Autonomous Reasoning Integration (OpenAI / Gemini API adapters).
 - [ ] Advanced Portfolio Analytics & Interactive Charting (Recharts / Chart.js).
 - [ ] User Authentication & Multi-User Profiles (JWT / FastAPI Security).

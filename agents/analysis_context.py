@@ -1,4 +1,4 @@
-﻿"""
+"""
 Analysis Context Module
 
 This module defines the AnalysisContext dataclass, which represents the shared
@@ -66,6 +66,15 @@ class AnalysisContext:
     agent_activity: List[Dict[str, Any]] = field(default_factory=list)
     decisions: List[str] = field(default_factory=list)
 
+    # --- Evolving Decision State (Day 31) -----------------------------------
+    market_summary: Optional[str] = None
+    news_summary: Optional[str] = None
+    risk_summary: Optional[str] = None
+    recommendation_summary: Optional[str] = None
+
+    decision_flags: Dict[str, bool] = field(default_factory=dict)
+    confidence_factors: List[str] = field(default_factory=list)
+
     # -----------------------------------------------------------------------
     # Status helpers
     # -----------------------------------------------------------------------
@@ -85,6 +94,51 @@ class AnalysisContext:
     def portfolio_succeeded(self) -> bool:
         """Return True if the portfolio agent ran and its output reports success."""
         return isinstance(self.portfolio_data, dict) and bool(self.portfolio_data.get("success"))
+
+    def update_decision_flags(self) -> Dict[str, bool]:
+        """
+        Dynamically populate deterministic decision flags based on actual upstream agent outputs.
+        Only flags for which valid data exists are created.
+        """
+        flags: Dict[str, bool] = {}
+
+        if self.market_succeeded():
+            direction = str(self.market_data.get("market_direction", "")).lower()
+            if direction == "bullish":
+                flags["market_bullish"] = True
+            elif direction == "bearish":
+                flags["market_bearish"] = True
+            elif direction == "neutral":
+                flags["market_neutral"] = True
+
+        if self.news_succeeded():
+            sentiment = str(self.news_data.get("overall_sentiment", "")).lower()
+            if sentiment == "positive":
+                flags["news_positive"] = True
+            elif sentiment == "negative":
+                flags["news_negative"] = True
+            elif sentiment == "neutral":
+                flags["news_neutral"] = True
+
+        if self.risk_succeeded():
+            risk_lvl = str(self.risk_data.get("risk_level", "")).lower()
+            if risk_lvl == "high":
+                flags["high_risk"] = True
+            elif risk_lvl == "medium":
+                flags["medium_risk"] = True
+            elif risk_lvl == "low":
+                flags["low_risk"] = True
+
+        if self.intent in ("STOCK_ANALYSIS", "CRYPTO_ANALYSIS"):
+            if self.market_succeeded() and self.risk_succeeded() and self.news_succeeded():
+                flags["recommendation_allowed"] = True
+                flags["recommendation_blocked"] = False
+            else:
+                flags["recommendation_allowed"] = False
+                flags["recommendation_blocked"] = True
+
+        self.decision_flags = flags
+        return flags
 
     # -----------------------------------------------------------------------
     # Activity recording

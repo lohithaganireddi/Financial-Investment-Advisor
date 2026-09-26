@@ -1,4 +1,4 @@
-﻿"""
+"""
 Risk Analysis Agent Module
 
 This module implements the RiskAgent, which evaluates financial risk based on structured
@@ -31,7 +31,7 @@ Risk Scoring Rules:
         - 70 to 100 -> "high"
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 class RiskAgent:
@@ -110,12 +110,14 @@ class RiskAgent:
         else:
             return "high"
 
-    def analyze_risk(self, data: dict) -> dict:
+    def analyze_risk(self, data: dict, news_data: Optional[dict] = None) -> dict:
         """
-        Analyze financial risk from a StockAgent or CryptoAgent result dictionary.
+        Analyze financial risk from a StockAgent or CryptoAgent result dictionary,
+        optionally incorporating news sentiment from NewsAgent if available.
 
         :param data: The structured output dict returned by StockAgent.analyze_stock()
                      or CryptoAgent.analyze_crypto().
+        :param news_data: Optional structured output dict returned by NewsAgent.analyze_news().
         :return: Structured dictionary containing the risk score, risk level, and
                  a breakdown of all scoring components, or an error dict on failure.
         """
@@ -195,6 +197,23 @@ class RiskAgent:
         # --- Retrieve market direction (default to neutral if absent) ------
         market_direction = str(data.get("market_direction", "neutral")).lower()
 
+        # --- Evaluate news sentiment adjustment if valid news_data provided -
+        news_adjustment = 0
+        news_sentiment = None
+        news_note = "News sentiment adjustment omitted: news context unavailable or invalid."
+
+        if isinstance(news_data, dict) and news_data.get("success"):
+            news_sentiment = str(news_data.get("overall_sentiment", "neutral")).lower()
+            if news_sentiment == "negative":
+                news_adjustment = 10
+                news_note = "Negative news sentiment increased risk (+10)."
+            elif news_sentiment == "positive":
+                news_adjustment = -5
+                news_note = "Positive news sentiment reduced risk (-5)."
+            else:
+                news_adjustment = 0
+                news_note = "Neutral news sentiment produced 0 risk adjustment."
+
         # --- Compute risk score --------------------------------------------
         abs_pct = abs(change_pct)
 
@@ -203,8 +222,8 @@ class RiskAgent:
         # Crypto assets carry an additional volatility premium
         crypto_bonus = 10 if asset_type == "crypto" else 0
 
-        raw_score = base_score + move_adjustment + direction_adjustment + crypto_bonus
-        final_score = min(raw_score, self._SCORE_CAP)
+        raw_score = base_score + move_adjustment + direction_adjustment + crypto_bonus + news_adjustment
+        final_score = max(0, min(raw_score, self._SCORE_CAP))
 
         level = self._risk_level(final_score)
 
@@ -213,7 +232,8 @@ class RiskAgent:
             f"{asset.upper()} ({asset_type}) risk score is {final_score}/100, "
             f"classified as {level} risk. "
             f"Market direction: {market_direction}. "
-            f"24h movement: {change_pct:+.2f}%."
+            f"24h movement: {change_pct:+.2f}%. "
+            f"{news_note}"
         )
 
         return {
@@ -231,6 +251,7 @@ class RiskAgent:
                 "movement_adjustment": move_adjustment,
                 "direction_adjustment": direction_adjustment,
                 "crypto_bonus": crypto_bonus,
+                "news_adjustment": news_adjustment,
                 "raw_score": raw_score,
                 "capped_at": self._SCORE_CAP
             }

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Portfolio Recommendation Agent Module
 
 This module implements the PortfolioAgent, which combines output from a market agent
@@ -190,7 +190,12 @@ class PortfolioAgent:
         ]:
             err = self._validate_input(data, label)
             if err:
-                return {"success": False, "agent": "PortfolioAgent", "error": err}
+                return {
+                    "success": False,
+                    "agent": "PortfolioAgent",
+                    "error": err,
+                    "factors": ["recommendation restricted because of missing data"],
+                }
 
         # --- Validate market agent type ------------------------------------
         market_agent = market_data.get("agent")
@@ -202,6 +207,7 @@ class PortfolioAgent:
                     f"Unsupported market agent: '{market_agent}'. "
                     f"Supported: {sorted(self._SUPPORTED_MARKET_AGENTS)}."
                 ),
+                "factors": ["recommendation restricted because of unsupported market agent"],
             }
 
         # --- Extract asset identifier -------------------------------------
@@ -212,6 +218,7 @@ class PortfolioAgent:
                 "success": False,
                 "agent": "PortfolioAgent",
                 "error": f"Missing asset identifier field '{asset_field}' in market_data.",
+                "factors": ["recommendation restricted because of missing asset identifier"],
             }
 
         asset_type = self._ASSET_TYPE[market_agent]
@@ -223,6 +230,7 @@ class PortfolioAgent:
                 "success": False,
                 "agent": "PortfolioAgent",
                 "error": "Missing 'market_direction' in market_data.",
+                "factors": ["recommendation restricted because of missing market direction"],
             }
 
         # --- Extract required risk fields ----------------------------------
@@ -232,6 +240,7 @@ class PortfolioAgent:
                 "success": False,
                 "agent": "PortfolioAgent",
                 "error": "Missing 'risk_level' in risk_data.",
+                "factors": ["recommendation restricted because of missing risk level"],
             }
 
         # --- Extract required news sentiment field -------------------------
@@ -241,6 +250,7 @@ class PortfolioAgent:
                 "success": False,
                 "agent": "PortfolioAgent",
                 "error": "Missing 'overall_sentiment' in news_data.",
+                "factors": ["recommendation restricted because of missing news sentiment"],
             }
 
         # --- Compute recommendation score ----------------------------------
@@ -255,12 +265,36 @@ class PortfolioAgent:
         recommendation = self._recommendation(final_score)
         confidence = self._confidence(market_direction, risk_level, news_sentiment)
 
-        # --- Build human-readable factors list ----------------------------
-        factors: List[str] = [
-            f"Market direction is {market_direction}.",
-            f"Risk level is {risk_level}.",
-            f"Financial news sentiment is {news_sentiment}.",
-        ]
+        # --- Build human-readable structured factors list ------------------
+        factors: List[str] = []
+
+        if market_direction == "bullish":
+            factors.append("positive market signal")
+        elif market_direction == "bearish":
+            factors.append("negative market signal")
+        else:
+            factors.append("neutral market signal")
+
+        if news_sentiment == "positive":
+            factors.append("positive news signal")
+        elif news_sentiment == "negative":
+            factors.append("negative news signal")
+        else:
+            factors.append("neutral news signal")
+
+        if risk_level == "high":
+            factors.append("elevated risk")
+        elif risk_level == "medium":
+            factors.append("moderate risk")
+        else:
+            factors.append("low risk factor")
+
+        if confidence == "high":
+            factors.append("high signal agreement")
+        elif confidence == "medium":
+            factors.append("moderate signal agreement")
+        else:
+            factors.append("mixed signal agreement")
 
         # --- Build deterministic summary sentence -------------------------
         asset_display = asset.upper() if asset_type == "stock" else asset.lower()

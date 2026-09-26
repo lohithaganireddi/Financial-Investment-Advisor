@@ -778,7 +778,7 @@ def test_portfolio_agent_buy_recommendation():
     assert result["risk_level"] == "low"
     assert result["news_sentiment"] == "positive"
     assert "disclaimer" in result
-    assert len(result["factors"]) == 3
+    assert len(result["factors"]) == 4
 
 
 def test_portfolio_agent_hold_recommendation():
@@ -1156,7 +1156,7 @@ def test_orchestrator_successful_stock_workflow():
     # Verify each agent was called exactly once with the correct argument
     mock_stock.analyze_stock.assert_called_once_with("AAPL")
     mock_news.analyze_news.assert_called_once_with(query="finance")
-    mock_risk.analyze_risk.assert_called_once_with(market)
+    mock_risk.analyze_risk.assert_called_once_with(market, news_data=news)
     mock_portfolio.generate_recommendation.assert_called_once_with(
         market_data=market, risk_data=risk, news_data=news
     )
@@ -2155,4 +2155,165 @@ def test_day29_existing_api_response_keys_preserved():
                 "market_data", "news_data", "risk_data", "recommendation",
                 "summary", "disclaimer"):
         assert key in result, f"Missing expected API response key: '{key}'"
+
+
+# ==========================================
+# Day 31 — Stronger Agentic Intelligence Tests
+# ==========================================
+
+def test_day31_risk_agent_news_sentiment_adjustments():
+    """Verify RiskAgent adjusts risk score based on news sentiment when present."""
+    risk_agent = RiskAgent()
+    market = {
+        "success": True, "agent": "StockAgent", "symbol": "AAPL",
+        "price": 180.0, "change": 2.0, "change_percent": 1.1,
+        "market_direction": "bullish"
+    }
+    # Base=30, move=0, dir=0, crypto=0 -> 30
+    res_no_news = risk_agent.analyze_risk(market)
+    assert res_no_news["risk_score"] == 30
+
+    res_neg_news = risk_agent.analyze_risk(
+        market,
+        news_data={"success": True, "overall_sentiment": "negative"}
+    )
+    # 30 + 10 = 40
+    assert res_neg_news["risk_score"] == 40
+    assert res_neg_news["score_breakdown"]["news_adjustment"] == 10
+
+    res_pos_news = risk_agent.analyze_risk(
+        market,
+        news_data={"success": True, "overall_sentiment": "positive"}
+    )
+    # 30 - 5 = 25
+    assert res_pos_news["risk_score"] == 25
+    assert res_pos_news["score_breakdown"]["news_adjustment"] == -5
+
+
+def test_day31_bullish_positive_low_risk_workflow():
+    """Test full workflow for bullish market, positive news, and low risk."""
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(100, "buy", "high"),
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+    assert res["success"] is True
+    assert res["recommendation"]["recommendation"] == "buy"
+    activities = res["agent_activity"]
+    assert len(activities) == 4
+    for act in activities:
+        assert "decision" in act and len(act["decision"]) > 0
+
+
+def test_day31_bearish_negative_high_risk_workflow():
+    """Test full workflow for bearish market, negative news, and high risk."""
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bearish"),
+        news_result=_make_news_data("negative"),
+        risk_result=_make_risk_data("high"),
+        portfolio_result=_make_recommendation(0, "avoid", "high"),
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "TSLA", "news_query": "Tesla",
+    })
+    assert res["success"] is True
+    assert res["recommendation"]["recommendation"] == "avoid"
+
+
+def test_day31_market_succeeds_news_fails_blocks_recommendation():
+    """When market succeeds but news fails, PortfolioAgent is skipped and recommendation is None."""
+    orch, _, _, _, _, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result={"success": False, "agent": "NewsAgent", "error": "News API rate limited"},
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(),
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+    assert res["success"] is True
+    assert res["market_data"]["success"] is True
+    assert res["news_data"]["success"] is False
+    assert res["risk_data"]["success"] is True
+    assert res["recommendation"] is None
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day31_market_succeeds_news_exception_blocks_recommendation():
+    """When NewsAgent raises an exception, PortfolioAgent is skipped and recommendation is None."""
+    mock_stock = MagicMock()
+    mock_stock.analyze_stock.return_value = _make_stock_market_data("bullish")
+
+    mock_news = MagicMock()
+    mock_news.analyze_news.side_effect = RuntimeError("Network connection error")
+
+    mock_risk = MagicMock()
+    mock_risk.analyze_risk.return_value = _make_risk_data("low")
+
+    mock_portfolio = MagicMock()
+
+    orch = Orchestrator(
+        stock_agent=mock_stock,
+        news_agent=mock_news,
+        risk_agent=mock_risk,
+        portfolio_agent=mock_portfolio,
+    )
+
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+
+    assert res["success"] is True
+    assert res["recommendation"] is None
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day31_unsupported_query_routing():
+    """Unsupported intent executes zero agents and returns success=False."""
+    orch = Orchestrator()
+    res = orch.run_intent({
+        "success": False, "intent": "UNSUPPORTED", "error": "Query not supported"
+    })
+    assert res["success"] is False
+    assert res["agents_used"] == []
+    assert res["agent_activity"] == []
+
+
+def test_day31_general_news_query_routing():
+    """General news intent executes only NewsAgent."""
+    orch, _, _, mock_news, _, _ = _make_orchestrator_for_intent(
+        news_result=_make_news_data("positive")
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "GENERAL_FINANCIAL_NEWS", "news_query": "inflation"
+    })
+    assert res["success"] is True
+    assert res["agents_used"] == ["NewsAgent"]
+    mock_news.analyze_news.assert_called_once_with(query="inflation")
+
+
+def test_day31_crypto_analysis_workflow():
+    """Crypto intent executes CryptoAgent -> NewsAgent -> RiskAgent -> PortfolioAgent."""
+    orch, _, mock_crypto, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        crypto_result=_make_crypto_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("medium"),
+        portfolio_result=_make_recommendation(75, "buy", "medium"),
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "CRYPTO_ANALYSIS",
+        "asset_type": "crypto", "asset": "bitcoin", "news_query": "Bitcoin",
+    })
+    assert res["success"] is True
+    assert res["agents_used"] == ["CryptoAgent", "NewsAgent", "RiskAgent", "PortfolioAgent"]
+    mock_crypto.analyze_crypto.assert_called_once_with("bitcoin")
+
 

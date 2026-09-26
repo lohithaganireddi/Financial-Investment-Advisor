@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-26 (Day 31: Stronger Agentic AI Intelligence)
+
+### Added
+- **Evolving Decision State**: Enhanced `AnalysisContext` with `market_summary`, `news_summary`, `risk_summary`, `recommendation_summary`, `decision_flags`, and `confidence_factors`.
+- **Deterministic Decision Flags**: Implemented `update_decision_flags()` on `AnalysisContext` to set `market_bullish`, `market_bearish`, `market_neutral`, `news_positive`, `news_negative`, `news_neutral`, `high_risk`, `medium_risk`, `low_risk`, `recommendation_allowed`, `recommendation_blocked`.
+- **Context-Aware RiskAgent**: Enhanced `RiskAgent.analyze_risk(data, news_data)` to evaluate news sentiment when available (+10 risk for negative news, -5 for positive news) while preserving baseline scoring and honest failure notes when news is absent.
+- **Context-Aware PortfolioAgent**: Enhanced `PortfolioAgent.generate_recommendation` to emit structured signal factors (`positive market signal`, `negative news signal`, `elevated risk`, `low risk factor`) and confidence factors.
+- **Improved Orchestrator Flow**:
+  - Integrated `ctx.decisions` decision tracing across execution steps.
+  - Generated dynamic, explainable decision rationales for each entry in `agent_activity`.
+  - Enforced skipping downstream PortfolioAgent when news or risk data fails/missing, setting `recommendation_blocked = True`.
+- **Expanded Test Suite**: Added comprehensive Day 31 unit tests in `tests/test_agents.py` bringing total passing test suite from 138 to 146 tests.
+
 ### Planned
 - External API client wrappers for Alpha Vantage, CoinGecko, and NewsData.
 - Agent implementations for Stock, Crypto, News, Risk, and Portfolio analysis.
