@@ -192,6 +192,15 @@
 
 ---
 
-## Future Phase: Advanced Development Roadmap (Days 40 – 45)
-- [ ] Dockerization & Production Cloud Deployment.
+## Day 40: Dockerization, CI/CD Pipeline & Production Cloud Deployment Setup (Completed ✅)
+- [x] Create root `Dockerfile` for FastAPI backend (Python 3.13-slim, Uvicorn on port 8000, `/health` health checks, SQLite volume persistence).
+- [x] Create `frontend/nginx.conf` for React SPA fallback, REST API proxying (`/api/`), WebSocket proxying (`/api/ws/`), and static asset caching.
+- [x] Create multi-stage `frontend/Dockerfile` (`node:20-alpine` build -> `nginx:alpine` runtime).
+- [x] Create `docker-compose.yml` orchestrating `backend` and `frontend` services with `sqlite_data` volume persistence and backend health check dependencies.
+- [x] Create `.github/workflows/ci.yml` CI/CD pipeline for backend `pytest` and frontend `npm run build` automated verification.
+- [x] Create `.dockerignore` files for root and frontend to optimize build contexts.
+- [x] Update `README.md`, `CHANGELOG.md`, and `TODO.md` with complete deployment documentation.
+- [x] Verify backend pytest test suite (181 passed).
+- [x] Verify frontend production build (`npm run build`).
+
 

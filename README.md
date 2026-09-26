@@ -1,4 +1,4 @@
-﻿# SmartFinancial Advisor (FinSight 2.0) 🚀
+# SmartFinancial Advisor (FinSight 2.0) 🚀
 
 Welcome to **SmartFinancial Advisor (FinSight 2.0)**! A deterministic, decision-driven multi-agent financial intelligence system that coordinates specialized AI agents to analyze stocks, cryptocurrency, and market news to deliver actionable portfolio recommendations and risk assessments.
 
@@ -25,6 +25,9 @@ FinSight 2.0 turns complex financial queries into clear, structured insights by 
 - 📊 **Agent Telemetry & Activity Dashboard**: Step-by-step pipeline execution tracking (`agents_used`, duration timing, step status, decision rationales).
 - 💾 **Historical Analysis Persistence**: Automatic storage of search queries, risk scores, recommendations, and execution telemetry in SQLite.
 - 🖥️ **Multi-Page React Frontend**: 10 distinct pages including Dashboard, Stock Analysis, Crypto Analysis, News, Risk Dashboard, Portfolio Advisor, Agent Activity, Analytics, History, and Settings.
+- ⚡ **Real-Time Data Streaming**: WebSockets ticker engine providing live price updates.
+- 🤖 **LLM Reasoning Layer**: Hybrid LLM reasoning synthesis with fallback options.
+- 🐳 **Dockerization & CI/CD Pipeline**: Multi-container Docker orchestration and GitHub Actions CI workflow.
 
 ---
 
@@ -50,31 +53,14 @@ Shared Analysis Context  ◄─────────────────�
                       (Gated on verified market, risk & news data)
 ```
 
-### 🤖 Specialized Agents
-
-1. **Stock Price Agent (`StockAgent`)**: Interacts with the **Alpha Vantage API** to fetch stock quotes, percentage changes, and directional trend summaries.
-2. **Crypto Agent (`CryptoAgent`)**: Interacts with the **CoinGecko API** to retrieve 24-hour cryptocurrency price action, market cap, and volume statistics.
-3. **Financial News Agent (`NewsAgent`)**: Interacts with the **NewsData API** to analyze business news headlines and calculate keyword sentiment scores.
-4. **Risk Analysis Agent (`RiskAgent`)**: Evaluates market movement volatility and trend direction to compute a composite risk score (0–100) and risk level (`low`, `medium`, `high`).
-5. **Portfolio Recommendation Agent (`PortfolioAgent`)**: Combines market direction, risk levels, and news sentiment into a final recommendation score, action (`buy`, `hold`, `avoid`), and confidence level.
-
-### 🧠 Shared `AnalysisContext` & Decision Pipeline
-
-The system uses a shared `AnalysisContext` dataclass (`agents/analysis_context.py`) that maintains state throughout execution:
-- **`market_data`**, **`news_data`**, **`risk_data`**, and **`portfolio_data`** are populated progressively.
-- Downstream decision helpers inspect context state before invoking dependent agents:
-  - `should_fetch_news`: Evaluates for stock, crypto, or news intent with valid search queries.
-  - `should_analyze_risk`: Requires verified, successful market data.
-  - `should_generate_portfolio_recommendation`: Requires successful market data, risk data, AND real news data.
-- **Honest Failure Policy**: If `NewsAgent` fails, `news_data` preserves the raw failure dict. The pipeline continues to `RiskAgent` (market data is sufficient), but `PortfolioAgent` is skipped to avoid fabricating neutral news sentiment.
-
 ---
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Python 3.10+, FastAPI, SQLAlchemy, SQLite, Pydantic v2.
-- **Frontend**: React 18, Vite, React Router DOM v6, Custom CSS with CSS Variables.
-- **External Services**: Alpha Vantage API (Stocks), CoinGecko API (Crypto), NewsData API (News).
+- **Backend**: Python 3.13, FastAPI, SQLAlchemy, SQLite, Pydantic v2, Uvicorn, WebSockets.
+- **Frontend**: React 18, Vite, React Router DOM v7, Lucide Icons, Nginx.
+- **External Services**: Alpha Vantage API (Stocks), CoinGecko API (Crypto), NewsData API (News), LLM Services (OpenAI/Gemini/Anthropic).
+- **Containerization & CI/CD**: Docker, Docker Compose, Nginx Reverse Proxy, GitHub Actions.
 - **Testing**: Pytest, FastAPI TestClient, unittest.mock.
 
 ---
@@ -83,6 +69,8 @@ The system uses a shared `AnalysisContext` dataclass (`agents/analysis_context.p
 
 ```text
 smartfinance_agenticai/
+├── .github/workflows/         # CI/CD Workflows
+│   └── ci.yml                 # Automated pytest & frontend build workflow
 ├── agents/                     # Multi-Agent Intelligence Engine
 │   ├── analysis_context.py     # Shared AnalysisContext state & telemetry
 │   ├── orchestrator.py         # Dynamic pipeline orchestrator & decision guards
@@ -93,7 +81,7 @@ smartfinance_agenticai/
 │   └── portfolio_agent.py      # Recommendation synthesis agent
 ├── backend/                    # FastAPI Backend Application
 │   ├── main.py                 # App entry point & middleware
-│   ├── routes.py               # REST API endpoints (/api/analyze, /api/query, /api/history)
+│   ├── routes.py               # REST & WebSocket API endpoints
 │   ├── database.py             # SQLAlchemy engine & SQLite schema migration
 │   ├── models.py               # Database ORM models
 │   └── schemas.py              # Pydantic request/response validation schemas
@@ -102,26 +90,32 @@ smartfinance_agenticai/
 │   ├── coingecko.py            # CoinGecko API client wrapper
 │   ├── newsdata.py             # NewsData API client wrapper
 │   ├── query_interpreter.py    # Natural language intent classifier & parser
+│   ├── backtest_engine.py      # Monte Carlo simulation engine
+│   ├── auth_service.py         # JWT & Password authentication service
+│   ├── llm_service.py          # LLM reasoning synthesis service
+│   ├── ticker_streamer.py      # WebSocket real-time ticker stream manager
+│   ├── user_repository.py      # User & Watchlist CRUD repository
 │   └── analysis_repository.py  # Database CRUD repository
 ├── frontend/                   # React + Vite Frontend Application
 │   ├── src/
-│   │   ├── components/         # Header, Sidebar, AgentDashboard, ResultCard, etc.
+│   │   ├── components/         # Header, Sidebar, AgentDashboard, ResultCard, LiveTickerStream, etc.
 │   │   ├── context/            # FinancialContext API state provider
-│   │   ├── pages/              # 10 Application Pages (Home, Stocks, Crypto, etc.)
+│   │   ├── pages/              # 10 Application Pages
 │   │   ├── App.jsx             # Main Router Layout
 │   │   └── index.css           # Global stylesheet & design system
+│   ├── nginx.conf              # Production Nginx reverse proxy configuration
+│   ├── Dockerfile              # Multi-stage frontend Dockerfile
 │   └── package.json            # Frontend dependencies & scripts
 ├── tests/                      # Automated Unit & Integration Tests
-│   ├── test_agents.py          # Agent & AnalysisContext unit tests
-│   ├── test_api.py             # Backend API endpoint tests
-│   ├── test_query_interpreter.py # Intent classifier tests
-│   └── test_services.py        # External API client wrapper tests
+├── Dockerfile                  # Backend Python Dockerfile
+├── docker-compose.yml          # Multi-container orchestration specification
+├── .dockerignore               # Docker build exclusions
 ├── .env.example                # Template for environment variables
 ├── .gitignore                  # Git exclusions (.env, db, venv, node_modules)
 ├── CHANGELOG.md                # Version history & milestone records
 ├── PROJECT_PLAN.md             # Architecture overview & development roadmap
 ├── README.md                   # Project documentation (You are here!)
-└── TODO.md                     # Completed V1.0 tasks & future roadmap
+└── TODO.md                     # Development task list
 ```
 
 ---
@@ -129,82 +123,69 @@ smartfinance_agenticai/
 ## ⚙️ Setup & Installation Instructions
 
 ### Prerequisites
-- Python 3.10 or higher
-- Node.js 18 or higher & npm
+- Python 3.10+ or Docker & Docker Compose
+- Node.js 18+ (for local frontend development)
 
-### 1. Environment Configuration
+---
 
-Copy `.env.example` to create your local `.env` file:
-```bash
-cp .env.example .env
-```
+### 🐳 Option A: Production Docker Deployment (Recommended)
 
-Configure your API keys in `.env` (the application works with fallback/mock data if keys are omitted):
-```ini
-ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
-NEWSDATA_API_KEY=your_newsdata_key
-DATABASE_URL=sqlite:///./smartfinance.db
-```
+1. **Clone repository & prepare environment**:
+   ```bash
+   cp .env.example .env
+   ```
 
-*Note: Never commit `.env` or hardcode API keys! `.env` is git-ignored.*
+2. **Build and launch with Docker Compose**:
+   ```bash
+   docker compose up --build -d
+   ```
 
-### 2. Backend Setup & Running
+3. **Access Services**:
+   - **Frontend Dashboard**: [http://localhost:80](http://localhost:80)
+   - **Backend REST API**: [http://localhost:8000](http://localhost:8000)
+   - **Backend API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+   - **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
 
-```bash
-# Create and activate Python virtual environment
-python -m venv venv
+4. **Stop Containers**:
+   ```bash
+   docker compose down
+   ```
 
-# Windows PowerShell:
-.\venv\Scripts\Activate.ps1
+---
 
-# Install Python dependencies
-pip install -r requirements.txt
+### 💻 Option B: Local Manual Setup
 
-# Start FastAPI backend server
-uvicorn backend.main:app --reload --port 8000
-```
-Backend API interactive documentation will be available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+1. **Backend Setup**:
+   ```bash
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   uvicorn backend.main:app --reload --port 8000
+   ```
 
-### 3. Frontend Setup & Running
-
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install Node packages
-npm install
-
-# Start Vite development server
-npm run dev
-```
-Frontend web application will be available at [http://localhost:5173](http://localhost:5173).
+2. **Frontend Setup**:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Access local frontend at [http://localhost:5173](http://localhost:5173).
 
 ---
 
 ## 🧪 Testing
 
-Run the backend test suite:
+Run backend Pytest suite:
 ```bash
-.\venv\Scripts\pytest.exe -q
+.\venv\Scripts\pytest.exe
 ```
-*Verification: 138 unit and integration tests passing.*
+*Verification: 181 unit & integration tests passing.*
 
-Run the frontend production build test:
+Run frontend production build verification:
 ```bash
 cd frontend
 npm run build
 ```
-*Verification: Vite build compiles with 0 errors.*
-
----
-
-## 💬 Example Queries
-
-- **Equities Analysis**: `"Should I invest in Apple?"` or `"Analyze TSLA"`
-- **Cryptocurrency Analysis**: `"What is the risk of Bitcoin?"` or `"Tell me about Ethereum"`
-- **General News Query**: `"Latest financial news"`
-- **Specific Asset News**: `"Apple stock news"`
-- **Ambiguous Multi-Asset Query**: `"Compare Apple and Tesla"` *(Returns UNSUPPORTED with multi-asset single-asset guidance)*
 
 ---
 

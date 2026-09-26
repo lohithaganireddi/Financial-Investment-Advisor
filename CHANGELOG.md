@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-26 (Day 40: Dockerization, CI/CD Pipeline & Production Cloud Deployment Setup)
+
+### Added
+- **Backend Docker Containerization**: Created root `Dockerfile` using `python:3.13-slim` base image, FastAPI Uvicorn application server on port 8000, `/health` endpoint health checks, and SQLite database persistence support.
+- **Production Nginx Reverse Proxy**: Created `frontend/nginx.conf` providing single-page application (SPA) fallback routing (`try_files`), gzip compression, REST API proxying (`/api/`), WebSocket upgrade header proxying (`/api/ws/`), and static asset caching.
+- **Frontend Multi-Stage Dockerfile**: Created `frontend/Dockerfile` using multi-stage build (`node:20-alpine` build stage -> `nginx:alpine` serving stage) exposing port 80.
+- **Multi-Container Orchestration**: Created `docker-compose.yml` orchestrating `backend` and `frontend` services with SQLite volume persistence (`sqlite_data`), backend health checks, and automatic restart policies.
+- **CI/CD Pipeline**: Created `.github/workflows/ci.yml` defining automated GitHub Actions pipeline executing Python 3.13 backend `pytest` suite and Node 20 frontend `npm run build` verification on pull requests and pushes to `main`.
+- **Deployment Documentation**: Updated `README.md`, `TODO.md`, and `CHANGELOG.md` with complete Docker deployment guide, environment setup, and release details.
+
 ## [1.9.0] - 2026-09-26 (Day 39: Real-Time Data Streaming & WebSocket Ticker Engine)
 
 ### Added
