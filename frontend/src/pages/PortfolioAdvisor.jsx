@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Briefcase, CheckCircle2, Info, TrendingUp, Coins } from 'lucide-react';
 import { useFinancial } from '../context/FinancialContext';
 import BacktestVisualizer from '../components/BacktestVisualizer';
+import WatchlistWidget from '../components/WatchlistWidget';
 
 export default function PortfolioAdvisor() {
   const { result, analysisContext } = useFinancial();
@@ -40,6 +41,9 @@ export default function PortfolioAdvisor() {
           </p>
         </div>
       </div>
+
+      {/* Personalized User Watchlist Live Monitoring */}
+      <WatchlistWidget />
 
       {recData ? (
         <>
@@ -99,7 +103,7 @@ export default function PortfolioAdvisor() {
           <Briefcase size={44} color="#ec4899" style={{ opacity: 0.6 }} />
           <h3>No Portfolio Recommendation Active</h3>
           <p>
-            Execute an analysis from the Stock or Crypto page to generate an autonomous portfolio recommendation.
+            Execute an analysis from the Stock or Crypto page or select an asset from your Watchlist above.
           </p>
           <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
             <Link to="/stocks" className="btn-primary" style={{ textDecoration: 'none', width: 'auto' }}>

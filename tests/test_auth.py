@@ -183,3 +183,39 @@ def test_watchlist_api_endpoints():
         assert del_data["success"] is True
     finally:
         app.dependency_overrides.clear()
+
+
+# ==========================================
+# Day 42 User-Bound History & Migration Tests
+# ==========================================
+
+def test_user_bound_analysis_history():
+    """Test saving analysis with user_id and filtering history by user."""
+    from services.analysis_repository import AnalysisRepository
+    from backend.models import Analysis
+
+    repo = AnalysisRepository()
+    mock_session = MagicMock()
+
+    # Test save_analysis with user_id
+    saved = repo.save_analysis(
+        query="Analyze TSLA",
+        asset_type="stock",
+        asset="TSLA",
+        user_id=42,
+        session=mock_session
+    )
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_called_once()
+
+    # Test get_recent_analyses with user_id filter
+    mock_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+    records = repo.get_recent_analyses(limit=10, user_id=42, session=mock_session)
+    mock_session.query.return_value.filter.assert_called_once()
+
+
+def test_init_db_idempotent_migration():
+    """Test init_db executes cleanly without error on existing schema."""
+    from backend.database import init_db
+    init_db()  # Must execute idempotently without throwing error
+

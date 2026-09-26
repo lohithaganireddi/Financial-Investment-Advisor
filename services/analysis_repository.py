@@ -42,6 +42,7 @@ class AnalysisRepository:
         market_direction: Optional[str] = None,
         news_sentiment: Optional[str] = None,
         agent_activity: Optional[Any] = None,
+        user_id: Optional[int] = None,
         session: Optional[Session] = None
     ) -> Optional[Analysis]:
         """
@@ -75,7 +76,8 @@ class AnalysisRepository:
                 risk_level=risk_level,
                 market_direction=market_direction,
                 news_sentiment=news_sentiment,
-                agent_activity=activity_json
+                agent_activity=activity_json,
+                user_id=user_id
             )
             db.add(record)
             db.commit()
@@ -92,12 +94,14 @@ class AnalysisRepository:
     def get_recent_analyses(
         self,
         limit: int = 10,
+        user_id: Optional[int] = None,
         session: Optional[Session] = None
     ) -> List[Analysis]:
         """
         Retrieve recent saved financial analyses, ordered newest first.
 
         :param limit: Number of records to return (default 10, maximum 50).
+        :param user_id: Optional integer user ID filter.
         :return: List of Analysis instances.
         """
         clean_limit = max(1, min(limit, 50))
@@ -105,8 +109,11 @@ class AnalysisRepository:
         close_needed = (session is None and self._external_session is None)
 
         try:
+            query_obj = db.query(Analysis)
+            if user_id is not None:
+                query_obj = query_obj.filter(Analysis.user_id == user_id)
             records = (
-                db.query(Analysis)
+                query_obj
                 .order_by(Analysis.created_at.desc(), Analysis.id.desc())
                 .limit(clean_limit)
                 .all()

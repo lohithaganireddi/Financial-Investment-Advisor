@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-26 (Day 42: Authenticated User Personalization: User-Bound Analysis History & Watchlist Live Monitoring Dashboard)
+
+### Added
+- **User-Bound Analysis History**: Updated SQLAlchemy `Analysis` database model with `user_id` foreign key and added an idempotent SQLite migration check in `init_db()`.
+- **User History API Filtering**: Updated `AnalysisRepository` and FastAPI endpoints (`POST /api/query`, `POST /api/analyze`, `GET /api/history`) to bind saved analysis records to the authenticated user and filter `GET /api/history` by `user_id`.
+- **Watchlist Live Monitoring Widget**: Created `frontend/src/components/WatchlistWidget.jsx` connecting saved user watchlist assets to the WebSocket real-time ticker stream (`WS /api/ws/ticker`), providing target price alert highlights (`Target Reached`), and a "Run AI Analysis" instant trigger button.
+- **Dashboard & Portfolio Advisor Integration**: Embedded `WatchlistWidget` into `Home.jsx` (AI Dashboard) and `PortfolioAdvisor.jsx` for personalized watchlist monitoring.
+- **Backend Test Suite**: Added user-bound history filtering and idempotent database schema migration tests in `tests/test_auth.py`.
+
 ## [2.1.0] - 2026-09-26 (Day 41: Frontend User Authentication Architecture & Route Protection)
 
 ### Added

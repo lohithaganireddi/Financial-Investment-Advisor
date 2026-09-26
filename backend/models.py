@@ -5,7 +5,7 @@ Defines the database schema for persisting financial analyses, user profiles, an
 """
 
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import Column, DateTime, Integer, String, Text, ForeignKey
 from backend.database import Base
 
 
@@ -16,6 +16,7 @@ class Analysis(Base):
     __tablename__ = "analyses"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     query = Column(String, nullable=False, index=True)
     asset_type = Column(String, nullable=False)
     asset = Column(String, nullable=False, index=True)

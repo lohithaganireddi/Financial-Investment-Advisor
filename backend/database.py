@@ -62,6 +62,11 @@ def init_db():
                     r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
                 ]:
                     conn.execute(text("ALTER TABLE analyses ADD COLUMN agent_activity TEXT"))
+                if "user_id" not in existing_cols and "analyses" in [
+                    r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+                ]:
+                    conn.execute(text("ALTER TABLE analyses ADD COLUMN user_id INTEGER REFERENCES users(id)"))
                 conn.commit()
         except Exception as exc:
             print(f"init_db migration notice: {exc}")
+

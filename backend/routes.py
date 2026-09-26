@@ -84,6 +84,26 @@ def get_stream_manager() -> TickerStreamManager:
 
 
 
+from backend.models import User
+
+
+def get_optional_current_user(
+    authorization: Optional[str] = Header(None),
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Optional[User]:
+    """Dependency helper to extract user from Authorization Bearer JWT token if present, returning None if unauthenticated."""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+        payload = AuthService.decode_access_token(token)
+        if payload and "sub" in payload:
+            try:
+                user_id = int(payload["sub"])
+                return user_repo.get_user_by_id(user_id)
+            except (ValueError, TypeError):
+                return None
+    return None
+
+
 @router.post("/analyze", response_model=Dict[str, Any])
 def analyze_asset(
     request: AnalyzeRequest,
@@ -115,7 +135,8 @@ def analyze_query(
     request: QueryRequest,
     interpreter: QueryInterpreter = Depends(get_query_interpreter),
     orchestrator: Orchestrator = Depends(get_orchestrator),
-    repository: AnalysisRepository = Depends(get_repository)
+    repository: AnalysisRepository = Depends(get_repository),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ) -> Dict[str, Any]:
     """
     Analyze a financial query by interpreting user intent and dynamically routing
@@ -131,6 +152,7 @@ def analyze_query(
     :param interpreter: Injected QueryInterpreter instance.
     :param orchestrator: Injected Orchestrator instance.
     :param repository: Injected AnalysisRepository instance.
+    :param current_user: Optional authenticated User model instance.
     :return: Standardized dictionary containing interpreted request, analysis result,
              agents_used list, and saved ID.
     """
@@ -178,6 +200,7 @@ def analyze_query(
             market_direction=market_data.get("market_direction") if isinstance(market_data, dict) else None,
             news_sentiment=news_data.get("overall_sentiment") if isinstance(news_data, dict) else None,
             agent_activity=analysis_res.get("agent_activity"),
+            user_id=current_user.id if current_user else None,
         )
 
         if saved_record is not None:
@@ -204,16 +227,20 @@ def analyze_query(
 @router.get("/history", response_model=HistoryListResponse)
 def get_analysis_history(
     limit: int = Query(default=10, ge=1, le=50, description="Number of recent records to retrieve (1-50)"),
-    repository: AnalysisRepository = Depends(get_repository)
+    repository: AnalysisRepository = Depends(get_repository),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ) -> Dict[str, Any]:
     """
     Retrieve recent saved financial asset analyses ordered newest first.
+    If authenticated, returns history records specific to current user.
 
     :param limit: Maximum number of history records to return (default 10, max 50).
     :param repository: Injected AnalysisRepository instance.
+    :param current_user: Optional authenticated user model instance.
     :return: List of Analysis records and count.
     """
-    records = repository.get_recent_analyses(limit=limit)
+    user_id_filter = current_user.id if current_user else None
+    records = repository.get_recent_analyses(limit=limit, user_id=user_id_filter)
     return {
         "success": True,
         "count": len(records),

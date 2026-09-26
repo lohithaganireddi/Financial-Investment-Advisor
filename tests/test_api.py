@@ -252,7 +252,8 @@ def test_query_endpoint_valid_stock():
                 {"agent": "NewsAgent", "status": "success", "order": 2, "summary": "Financial news sentiment evaluated (positive)"},
                 {"agent": "RiskAgent", "status": "success", "order": 3, "summary": "Risk score evaluated: 30 (low)"},
                 {"agent": "PortfolioAgent", "status": "success", "order": 4, "summary": "Recommendation generated: BUY"},
-            ]
+            ],
+            user_id=None
         )
     finally:
         app.dependency_overrides.clear()
@@ -430,7 +431,7 @@ def test_get_history_endpoint():
         assert data["count"] == 1
         assert len(data["analyses"]) == 1
         assert data["analyses"][0]["asset"] == "AAPL"
-        mock_repo.get_recent_analyses.assert_called_once_with(limit=5)
+        mock_repo.get_recent_analyses.assert_called_once_with(limit=5, user_id=None)
     finally:
         app.dependency_overrides.clear()
 

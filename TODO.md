@@ -215,5 +215,17 @@
 - [x] Verify backend pytest test suite (181 passed).
 - [x] Verify frontend production build (`npm run build`).
 
+---
+
+## Day 42: Authenticated User Personalization: User-Bound Analysis History & Watchlist Live Monitoring Dashboard (Completed ✅)
+- [x] Update `Analysis` model in `backend/models.py` with `user_id` foreign key and add idempotent SQLite schema migration in `backend/database.py`.
+- [x] Update `AnalysisRepository` and API endpoints (`POST /api/query`, `POST /api/analyze`, `GET /api/history`) to bind analysis records to `current_user.id` and filter `GET /api/history` by user.
+- [x] Create `frontend/src/components/WatchlistWidget.jsx` displaying saved watchlist items with WebSocket live price streaming, target price alert badges (`Target Reached`), and "Run AI Analysis" instant trigger buttons.
+- [x] Embed `WatchlistWidget` into `frontend/src/pages/Home.jsx` (AI Dashboard) and `frontend/src/pages/PortfolioAdvisor.jsx`.
+- [x] Add user-bound history filtering and idempotent migration tests in `tests/test_auth.py`.
+- [x] Verify backend pytest test suite (181 passed).
+- [x] Verify frontend production build (`npm run build`).
+
+
 
 

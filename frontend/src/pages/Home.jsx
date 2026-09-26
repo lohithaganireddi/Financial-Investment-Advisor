@@ -16,6 +16,7 @@ import AnalysisForm from '../components/AnalysisForm';
 import ResultCard from '../components/ResultCard';
 import HistoryList from '../components/HistoryList';
 import LiveTickerStream from '../components/LiveTickerStream';
+import WatchlistWidget from '../components/WatchlistWidget';
 
 export default function Home() {
   const {
@@ -92,6 +93,9 @@ export default function Home() {
           </p>
         </div>
       </div>
+
+      {/* Personalized User Watchlist Live Monitoring Dashboard */}
+      <WatchlistWidget />
 
       {/* Real-Time WebSocket Ticker Streaming Feed */}
       <LiveTickerStream />
