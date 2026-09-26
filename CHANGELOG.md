@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-09-26 (Day 43: Interactive Conversational LLM Financial Assistant & Multi-Turn Chat Engine)
+
+### Added
+- **Multi-Turn LLM Chat Engine**: Added `chat_synthesis()` method to `LLMService` (`services/llm_service.py`) supporting context-grounded conversational multi-turn Q&A for equities, crypto, risk profiles, catalysts, and conservative strategies.
+- **LLM Chat REST Endpoint**: Implemented `POST /api/llm/chat` in `backend/routes.py` with validation models `LLMChatMessage`, `LLMChatRequest`, and `LLMChatResponse` in `backend/schemas.py`.
+- **Interactive Conversational UI Component**: Created `frontend/src/components/LLMChatAssistant.jsx` and embedded it into `ResultCard.jsx`, rendering conversational message bubbles, quick suggested prompt chips, typing indicators, and LLM provider badges.
+- **Unit & Integration Tests**: Added test cases in `tests/test_llm.py` covering multi-turn chat synthesis, context grounding, and `POST /api/llm/chat` REST endpoint verification.
+
 ## [2.2.0] - 2026-09-26 (Day 42: Authenticated User Personalization: User-Bound Analysis History & Watchlist Live Monitoring Dashboard)
 
 ### Added

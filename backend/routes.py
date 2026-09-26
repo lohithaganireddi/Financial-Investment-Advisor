@@ -23,6 +23,7 @@ from backend.schemas import (
     WatchlistItemResponse,
     WatchlistListResponse,
     LLMSynthesizeRequest,
+    LLMChatRequest,
 )
 from agents.orchestrator import Orchestrator
 from services.query_interpreter import QueryInterpreter
@@ -481,6 +482,35 @@ def synthesize_llm_reasoning(
             detail=result.get("error", "LLM reasoning synthesis failed.")
         )
     return result
+
+
+@router.post("/llm/chat", response_model=Dict[str, Any])
+def chat_llm_financial_assistant(
+    request: LLMChatRequest,
+    llm_service: LLMService = Depends(get_llm_service)
+) -> Dict[str, Any]:
+    """
+    Multi-turn conversational LLM financial assistant endpoint.
+    Processes user follow-up questions grounded in active analysis context.
+
+    :param request: LLMChatRequest containing messages list, analysis_context, provider, and optional model.
+    :param llm_service: Injected LLMService instance.
+    :return: Chat synthesis response dictionary containing assistant reply, provider, and model.
+    """
+    messages_dicts = [m.model_dump() for m in request.messages]
+    result = llm_service.chat_synthesis(
+        messages=messages_dicts,
+        analysis_context=request.analysis_context,
+        provider=request.provider or "auto",
+        model=request.model
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error", "LLM chat synthesis failed.")
+        )
+    return result
+
 
 
 @router.websocket("/ws/ticker")

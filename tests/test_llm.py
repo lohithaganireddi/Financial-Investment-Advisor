@@ -151,3 +151,62 @@ def test_llm_synthesize_endpoint_error():
         assert "Analysis data must be a non-empty dictionary" in data["detail"]
     finally:
         app.dependency_overrides.clear()
+
+
+# ==========================================
+# Day 43 Conversational Chat Tests
+# ==========================================
+
+def test_llm_chat_synthesis():
+    """Test multi-turn chat synthesis grounded in analysis context."""
+    service = LLMService()
+    ctx = {
+        "asset": "NVDA",
+        "asset_type": "stock",
+        "market_direction": "bullish",
+        "risk_level": "medium",
+        "risk_score": 55,
+        "news_sentiment": "positive",
+        "recommendation": {"recommendation": "buy", "recommendation_score": 85}
+    }
+
+    messages = [
+        {"role": "user", "content": "What is the risk profile for NVDA?"}
+    ]
+
+    res = service.chat_synthesis(messages=messages, analysis_context=ctx)
+
+    assert res["success"] is True
+    assert "reply" in res
+    assert "NVDA" in res["reply"]
+    assert "MEDIUM" in res["reply"] or "medium" in res["reply"]
+    assert res["provider"] == "offline_fallback"
+
+
+def test_llm_chat_endpoint_success():
+    """Test POST /api/llm/chat REST endpoint."""
+    mock_service = MagicMock()
+    mock_service.chat_synthesis.return_value = {
+        "success": True,
+        "reply": "Autonomous chat response for AAPL.",
+        "provider": "offline_fallback",
+        "model": "smartfinance-hybrid-chat-v1",
+        "disclaimer": "Educational disclaimer."
+    }
+
+    app.dependency_overrides[get_llm_service] = lambda: mock_service
+
+    try:
+        payload = {
+            "messages": [{"role": "user", "content": "Explain risk for AAPL"}],
+            "analysis_context": {"asset": "AAPL", "asset_type": "stock"},
+            "provider": "auto"
+        }
+        response = client.post("/api/llm/chat", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["reply"] == "Autonomous chat response for AAPL."
+    finally:
+        app.dependency_overrides.clear()
+

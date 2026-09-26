@@ -183,4 +183,28 @@ class LLMSynthesizeRequest(BaseModel):
     model: Optional[str] = Field(default=None, description="Optional target model identifier")
 
 
+class LLMChatMessage(BaseModel):
+    """Schema for an individual chat message in a conversational thread."""
+    role: str = Field(..., description="Message sender role: 'user' or 'assistant'")
+    content: str = Field(..., description="Message text content")
+
+
+class LLMChatRequest(BaseModel):
+    """Request payload schema for POST /api/llm/chat."""
+    messages: List[LLMChatMessage] = Field(..., description="List of multi-turn chat messages")
+    analysis_context: Optional[dict] = Field(default=None, description="Optional active analysis context dictionary")
+    provider: Optional[str] = Field(default="auto", description="Target LLM provider ('auto', 'openai', 'gemini', 'anthropic', 'offline_fallback')")
+    model: Optional[str] = Field(default=None, description="Optional target model identifier")
+
+
+class LLMChatResponse(BaseModel):
+    """Response payload schema for POST /api/llm/chat."""
+    success: bool = Field(..., description="Success status flag")
+    reply: str = Field(..., description="Assistant reply message content")
+    provider: str = Field(..., description="LLM provider name used")
+    model: str = Field(..., description="Model identifier used")
+    disclaimer: Optional[str] = Field(default=None, description="Financial disclaimer notice")
+
+
+
 
