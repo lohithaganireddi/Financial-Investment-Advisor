@@ -313,3 +313,84 @@ def test_newsdata_network_error(mock_get):
 
     assert result["success"] is False
     assert "Network error connecting to NewsData" in result["error"]
+
+
+# ==========================================
+# BacktestEngine Service Unit Tests (Day 36)
+# ==========================================
+
+from services.backtest_engine import BacktestEngine
+
+
+def test_backtest_engine_success_stock():
+    """Test successful Monte Carlo simulation for stock asset with seed reproducibility."""
+    engine = BacktestEngine()
+    res = engine.run_backtest(
+        asset="AAPL",
+        asset_type="stock",
+        initial_investment=10000.0,
+        horizon_months=12,
+        iterations=500,
+        seed=42,
+    )
+
+    assert res["success"] is True
+    assert res["asset"] == "AAPL"
+    assert res["asset_type"] == "stock"
+    assert res["initial_investment"] == 10000.0
+    assert res["horizon_months"] == 12
+    assert res["iterations"] == 500
+
+    metrics = res["metrics"]
+    assert "expected_final_value" in metrics
+    assert "expected_return_pct" in metrics
+    assert "bearish_p5_value" in metrics
+    assert "bullish_p95_value" in metrics
+    assert "value_at_risk_95" in metrics
+    assert "sharpe_ratio" in metrics
+    assert "success_rate_pct" in metrics
+
+    assert len(res["trajectory"]) == 13  # Month 0 to Month 12
+    assert res["trajectory"][0]["month"] == 0
+    assert res["trajectory"][0]["p50"] == 10000.0
+
+
+def test_backtest_engine_crypto_with_risk_score():
+    """Test crypto simulation adjusted with risk score volatility multiplier."""
+    engine = BacktestEngine()
+    res = engine.run_backtest(
+        asset="bitcoin",
+        asset_type="crypto",
+        initial_investment=5000.0,
+        horizon_months=6,
+        iterations=300,
+        risk_score=75,
+        seed=100,
+    )
+
+    assert res["success"] is True
+    assert res["asset"] == "BITCOIN"
+    assert res["asset_type"] == "crypto"
+    assert len(res["trajectory"]) == 7
+
+
+def test_backtest_engine_invalid_inputs():
+    """Test BacktestEngine error validation on invalid parameters."""
+    engine = BacktestEngine()
+
+    res_empty_asset = engine.run_backtest(asset="")
+    assert res_empty_asset["success"] is False
+    assert "Asset symbol or name must be a non-empty string" in res_empty_asset["error"]
+
+    res_neg_inv = engine.run_backtest(asset="AAPL", initial_investment=-500)
+    assert res_neg_inv["success"] is False
+    assert "Initial investment must be greater than 0" in res_neg_inv["error"]
+
+    res_bad_horizon = engine.run_backtest(asset="AAPL", horizon_months=100)
+    assert res_bad_horizon["success"] is False
+    assert "Horizon months must be between 1 and 60" in res_bad_horizon["error"]
+
+    res_bad_iter = engine.run_backtest(asset="AAPL", iterations=5)
+    assert res_bad_iter["success"] is False
+    assert "Iterations must be an integer between 10 and 2000" in res_bad_iter["error"]
+

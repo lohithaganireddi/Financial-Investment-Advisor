@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Briefcase, CheckCircle2, Info, TrendingUp, Coins } from 'lucide-react';
 import { useFinancial } from '../context/FinancialContext';
+import BacktestVisualizer from '../components/BacktestVisualizer';
 
 export default function PortfolioAdvisor() {
   const { result, analysisContext } = useFinancial();
@@ -12,6 +13,10 @@ export default function PortfolioAdvisor() {
   const recScore = recData?.recommendation_score ?? '-';
   const factors = recData?.factors || [];
   const disclaimer = result?.disclaimer || 'Software-generated financial recommendation for informational purposes.';
+
+  const activeAsset = analysisContext?.asset || result?.asset || 'AAPL';
+  const activeAssetType = analysisContext?.asset_type || result?.asset_type || 'stock';
+  const activeRiskScore = result?.risk_data?.risk_score ?? analysisContext?.risk_score ?? null;
 
   const getRecClass = (rec) => {
     switch (rec?.toUpperCase()) {
@@ -31,7 +36,7 @@ export default function PortfolioAdvisor() {
             Portfolio Recommendation Advisor
           </h2>
           <p className="page-subtitle">
-            Synthesized multi-agent intelligence providing autonomous investment guidance.
+            Synthesized multi-agent intelligence providing autonomous investment guidance & backtesting.
           </p>
         </div>
       </div>
@@ -42,7 +47,7 @@ export default function PortfolioAdvisor() {
           <div className="card recommendation-hero-card">
             <div className="hero-rec-header">
               <div>
-                <span className="hero-rec-label">Asset: {analysisContext?.asset || result?.asset || 'Target Asset'}</span>
+                <span className="hero-rec-label">Asset: {activeAsset}</span>
                 <div className={`recommendation-badge ${getRecClass(recommendation)}`} style={{ fontSize: '1.5rem', padding: '0.6rem 1.5rem', marginTop: 8 }}>
                   {recommendation.toUpperCase()}
                 </div>
@@ -90,7 +95,7 @@ export default function PortfolioAdvisor() {
           </div>
         </>
       ) : (
-        <div className="card empty-state-card">
+        <div className="card empty-state-card" style={{ marginBottom: '1.75rem' }}>
           <Briefcase size={44} color="#ec4899" style={{ opacity: 0.6 }} />
           <h3>No Portfolio Recommendation Active</h3>
           <p>
@@ -106,6 +111,13 @@ export default function PortfolioAdvisor() {
           </div>
         </div>
       )}
+
+      {/* Interactive Backtesting Engine Visualizer */}
+      <BacktestVisualizer
+        initialAsset={activeAsset}
+        initialAssetType={activeAssetType}
+        riskScore={activeRiskScore}
+      />
     </div>
   );
 }

@@ -513,3 +513,81 @@ def test_get_history_by_id_endpoint_not_found():
     finally:
         app.dependency_overrides.clear()
 
+
+# ==========================================
+# Backtest Endpoint Unit Tests (Day 36)
+# ==========================================
+
+from backend.routes import get_backtest_engine
+
+
+def test_backtest_endpoint_success():
+    """Test POST /api/backtest endpoint with valid request payload."""
+    mock_engine = MagicMock()
+    mock_engine.run_backtest.return_value = {
+        "success": True,
+        "asset": "AAPL",
+        "asset_type": "stock",
+        "initial_investment": 10000.0,
+        "horizon_months": 12,
+        "iterations": 500,
+        "metrics": {
+            "expected_final_value": 11050.0,
+            "expected_return_pct": 10.5,
+            "bearish_p5_value": 7500.0,
+            "bullish_p95_value": 15200.0,
+            "volatility_pct": 20.0,
+            "max_drawdown_pct": 15.2,
+            "value_at_risk_95": 2500.0,
+            "sharpe_ratio": 0.35,
+            "success_rate_pct": 68.5,
+        },
+        "trajectory": [{"month": 0, "p5": 10000.0, "p50": 10000.0, "p95": 10000.0}],
+        "summary": "Monte Carlo simulation projected median outcome of $11,050.00.",
+        "disclaimer": "Educational simulation disclaimer.",
+    }
+
+    app.dependency_overrides[get_backtest_engine] = lambda: mock_engine
+
+    try:
+        payload = {
+            "asset": "AAPL",
+            "asset_type": "stock",
+            "initial_investment": 10000.0,
+            "horizon_months": 12,
+            "iterations": 500
+        }
+        response = client.post("/api/backtest", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["asset"] == "AAPL"
+        assert data["metrics"]["expected_final_value"] == 11050.0
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_backtest_endpoint_invalid_payload():
+    """Test POST /api/backtest endpoint handling engine error failure."""
+    mock_engine = MagicMock()
+    mock_engine.run_backtest.return_value = {
+        "success": False,
+        "error": "Initial investment must be greater than 0."
+    }
+
+    app.dependency_overrides[get_backtest_engine] = lambda: mock_engine
+
+    try:
+        payload = {
+            "asset": "AAPL",
+            "initial_investment": -100.0,
+            "horizon_months": 12
+        }
+        response = client.post("/api/backtest", json=payload)
+        assert response.status_code == 400
+        data = response.json()
+        assert "Initial investment must be greater than 0" in data["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+

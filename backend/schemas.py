@@ -103,3 +103,15 @@ class HistoryDetailResponse(BaseModel):
     """Response schema for GET /api/history/{analysis_id}."""
     success: bool = True
     analysis: AnalysisRecordResponse
+
+
+class BacktestRequest(BaseModel):
+    """Request payload schema for POST /api/backtest."""
+    asset: str = Field(..., description="Asset ticker symbol or coin ID", examples=["AAPL"])
+    asset_type: Optional[str] = Field(default="stock", description="Asset category: 'stock' or 'crypto'", examples=["stock"])
+    initial_investment: float = Field(default=10000.0, description="Initial investment amount in USD", examples=[10000.0])
+    horizon_months: int = Field(default=12, description="Simulation horizon in months (1-60)", examples=[12])
+    iterations: Optional[int] = Field(default=500, description="Number of Monte Carlo simulation trials (10-2000)", examples=[500])
+    risk_score: Optional[int] = Field(default=None, description="Optional risk score (0-100) to adjust volatility", examples=[35])
+    seed: Optional[int] = Field(default=42, description="Pseudo-random seed for deterministic testing", examples=[42])
+

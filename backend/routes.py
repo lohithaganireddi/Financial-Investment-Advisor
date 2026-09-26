@@ -12,10 +12,12 @@ from backend.schemas import (
     QueryRequest,
     HistoryListResponse,
     HistoryDetailResponse,
+    BacktestRequest,
 )
 from agents.orchestrator import Orchestrator
 from services.query_interpreter import QueryInterpreter
 from services.analysis_repository import AnalysisRepository
+from services.backtest_engine import BacktestEngine
 
 router = APIRouter(prefix="/api", tags=["Analysis"])
 
@@ -23,6 +25,7 @@ router = APIRouter(prefix="/api", tags=["Analysis"])
 _default_orchestrator = Orchestrator()
 _default_interpreter = QueryInterpreter()
 _default_repository = AnalysisRepository()
+_default_backtest_engine = BacktestEngine()
 
 
 def get_orchestrator() -> Orchestrator:
@@ -38,6 +41,12 @@ def get_query_interpreter() -> QueryInterpreter:
 def get_repository() -> AnalysisRepository:
     """Dependency provider for AnalysisRepository instance, easily overridable in tests."""
     return _default_repository
+
+
+def get_backtest_engine() -> BacktestEngine:
+    """Dependency provider for BacktestEngine instance, easily overridable in tests."""
+    return _default_backtest_engine
+
 
 
 @router.post("/analyze", response_model=Dict[str, Any])
@@ -199,3 +208,33 @@ def get_analysis_by_id(
         "success": True,
         "analysis": record
     }
+
+
+@router.post("/backtest", response_model=Dict[str, Any])
+def run_portfolio_backtest(
+    request: BacktestRequest,
+    engine: BacktestEngine = Depends(get_backtest_engine)
+) -> Dict[str, Any]:
+    """
+    Execute a Monte Carlo simulation backtest for a portfolio target asset.
+
+    :param request: BacktestRequest containing asset, asset_type, investment amount, horizon, etc.
+    :param engine: Injected BacktestEngine instance.
+    :return: Monte Carlo simulation report dictionary.
+    """
+    result = engine.run_backtest(
+        asset=request.asset,
+        asset_type=request.asset_type or "stock",
+        initial_investment=request.initial_investment,
+        horizon_months=request.horizon_months,
+        iterations=request.iterations or 500,
+        risk_score=request.risk_score,
+        seed=request.seed
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error", "Backtest execution failed.")
+        )
+    return result
+

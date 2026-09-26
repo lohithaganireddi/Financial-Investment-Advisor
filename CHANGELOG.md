@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-26 (Day 36: Portfolio Backtesting & Monte Carlo Simulation Engine)
+
+### Added
+- **Monte Carlo Simulation Engine**: Created `services/backtest_engine.py` to run stochastic lognormal random walks over 500 statistical trials projecting portfolio values, 5th/50th/95th percentiles, Value at Risk (VaR 95%), Sharpe Ratio, Maximum Drawdown, and success probabilities.
+- **Backtest API Endpoint**: Implemented `POST /api/backtest` in `backend/routes.py` with validation schemas in `backend/schemas.py`.
+- **Interactive Backtesting UI**: Built `frontend/src/components/BacktestVisualizer.jsx` and embedded it in `frontend/src/pages/PortfolioAdvisor.jsx` to provide interactive capital controls ($1k-$100k), horizon select (3-24 months), scenario comparison cards, and monthly trajectory progress timelines.
+- **Service & API Unit Tests**: Added unit tests in `tests/test_services.py` and `tests/test_api.py` bringing total test suite from 158 to 163 passing tests.
+
 ## [1.5.0] - 2026-09-26 (Day 35: Advanced Portfolio Analytics & Risk Breakdown / Interactive Allocation Visualizer)
 
 ### Added

@@ -145,9 +145,20 @@
 
 ---
 
-## Future Phase: Advanced Development Roadmap (Days 36 – 45)
+## Day 36: Portfolio Backtesting & Monte Carlo Simulation Engine (Completed ✅)
+- [x] Create `services/backtest_engine.py` for stochastic Monte Carlo price simulations (500 statistical trials, 5th/50th/95th percentiles, VaR 95%, Sharpe ratio, Max Drawdown).
+- [x] Add Pydantic schemas in `backend/schemas.py` (`BacktestRequest`).
+- [x] Add `POST /api/backtest` endpoint in `backend/routes.py`.
+- [x] Build `frontend/src/components/BacktestVisualizer.jsx` with interactive capital controls ($1k-$100k), horizon select (3-24m), and scenario trajectory cards.
+- [x] Embed `BacktestVisualizer` into `frontend/src/pages/PortfolioAdvisor.jsx`.
+- [x] Add unit tests in `tests/test_services.py` and `tests/test_api.py` bringing test suite to 163 passed.
+- [x] Verify backend pytest test suite (163 passed).
+- [x] Verify frontend production build (`npm run build`).
+
+---
+
+## Future Phase: Advanced Development Roadmap (Days 37 – 45)
 - [ ] LLM & Autonomous Reasoning Integration (OpenAI / Gemini API adapters).
-- [ ] Advanced Interactive Backtesting & Monte Carlo Simulations.
 - [ ] User Authentication & Multi-User Profiles (JWT / FastAPI Security).
 - [ ] WebSockets for Real-Time Ticker Streaming.
 - [ ] Dockerization & Production Cloud Deployment.
