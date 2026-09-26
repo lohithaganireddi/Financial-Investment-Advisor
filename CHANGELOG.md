@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-26 (Day 33: Decision Trace UI / Explainability Layer)
+
+### Added
+- **DecisionTrace Component**: Created a reusable React component (`frontend/src/components/DecisionTrace.jsx`) to visualize the backend `decision_trace`.
+- **Structured Visual Layout**: Displays step number, agent badge, action, rationale/reason, result status badge, and next decision action banner in a clean timeline layout.
+- **Support for All Workflow Types**: Handles full 5-step stock and crypto pipeline traces, 2-step general financial news traces, 1-step unsupported query halt traces, and market/news failure-blocking traces.
+- **Graceful Fallback**: Safely handles missing, null, or empty traces with an informative fallback notice ("Decision trace is not available for this analysis.") without crashing.
+- **UI Integration**: Connected `decision_trace` across `FinancialContext.jsx`, `ResultCard.jsx`, `AgentActivity.jsx`, and `AgentDashboard.jsx`.
+- **API Response Field**: Included `decision_trace` at the top level of `POST /api/query` response in `backend/routes.py` while preserving 100% backward compatibility.
+
 ## [1.2.0] - 2026-09-26 (Day 32: Explainability & Decision Trace)
 
 ### Added

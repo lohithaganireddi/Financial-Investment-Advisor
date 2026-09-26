@@ -91,6 +91,7 @@ export function FinancialProvider({ children }) {
           asset_type: analysisBody.asset_type || data.interpreted?.asset_type || data.asset_type,
           agents_used: data.agents_used || analysisBody.agents_used || [],
           agent_activity: data.agent_activity || analysisBody.agent_activity || [],
+          decision_trace: data.decision_trace || analysisBody.decision_trace || [],
           saved_analysis_id: data.saved_analysis_id,
         };
 
@@ -127,6 +128,7 @@ export function FinancialProvider({ children }) {
             intent: record.asset_type === 'stock' ? 'STOCK_ANALYSIS' : 'CRYPTO_ANALYSIS',
             agent_activity: record.agent_activity || [],
             agents_used: (record.agent_activity || []).map((a) => a.agent),
+            decision_trace: record.decision_trace || [],
             summary: `Historical Analysis Record #${record.id} for "${record.query}".`,
             disclaimer: 'Software-generated historical recommendation record retrieved from SQLite database.',
             recommendation: {
@@ -163,6 +165,7 @@ export function FinancialProvider({ children }) {
   };
 
   const agentActivity = result?.agent_activity || [];
+  const decisionTrace = result?.decision_trace || result?.analysis?.decision_trace || [];
 
   const analysisContext = result ? {
     query: result.query || (result.asset ? `Analyze ${result.asset}` : null),
@@ -175,6 +178,7 @@ export function FinancialProvider({ children }) {
     risk_level: result.risk_data?.risk_level,
     risk_score: result.risk_data?.risk_score,
     saved_id: result.saved_analysis_id,
+    decision_trace: decisionTrace,
   } : null;
 
   return (
@@ -187,6 +191,7 @@ export function FinancialProvider({ children }) {
         selectedId,
         error,
         agentActivity,
+        decisionTrace,
         analysisContext,
         handleStructuredAnalyze,
         handleQueryAnalyze,

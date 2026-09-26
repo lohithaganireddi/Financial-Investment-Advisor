@@ -4,7 +4,7 @@ import { useFinancial } from '../context/FinancialContext';
 import AgentDashboard from '../components/AgentDashboard';
 
 export default function AgentActivity() {
-  const { agentActivity, analysisContext } = useFinancial();
+  const { agentActivity, decisionTrace, analysisContext } = useFinancial();
 
   return (
     <div className="page-container">
@@ -15,12 +15,12 @@ export default function AgentActivity() {
             Agent Activity & Execution Telemetry
           </h2>
           <p className="page-subtitle">
-            Real-time tracking of multi-agent pipeline order, step-by-step execution summaries, and telemetry logs.
+            Real-time tracking of multi-agent pipeline order, step-by-step execution summaries, decision traces, and telemetry logs.
           </p>
         </div>
       </div>
 
-      <AgentDashboard agentActivity={agentActivity} context={analysisContext} />
+      <AgentDashboard agentActivity={agentActivity} context={analysisContext} decisionTrace={decisionTrace} />
     </div>
   );
 }

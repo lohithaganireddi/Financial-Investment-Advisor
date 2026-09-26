@@ -1,5 +1,6 @@
 import React from 'react';
 import { Award, ShieldAlert, Newspaper, TrendingUp, Info, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import DecisionTrace from './DecisionTrace';
 
 export default function ResultCard({ result }) {
   if (!result) return null;
@@ -8,14 +9,20 @@ export default function ResultCard({ result }) {
   const isQueryResponse = 'interpreted' in result;
   const analysisData = isQueryResponse ? result.analysis : result;
   const queryPrompt = isQueryResponse ? result.query : null;
+  const decisionTrace = result.decision_trace || analysisData?.decision_trace || result?.analysis?.decision_trace || [];
 
   if (!analysisData || analysisData.success === false) {
     return (
-      <div className="error-box">
-        <AlertTriangle size={20} style={{ flexShrink: 0 }} />
-        <div>
-          <strong>Analysis Pipeline Warning:</strong> {analysisData?.error || result?.error || 'Unable to complete financial analysis.'}
+      <div className="error-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.68rem' }}>
+          <AlertTriangle size={20} style={{ flexShrink: 0 }} />
+          <div>
+            <strong>Analysis Pipeline Warning:</strong> {analysisData?.error || result?.error || 'Unable to complete financial analysis.'}
+          </div>
         </div>
+        {decisionTrace && decisionTrace.length > 0 && (
+          <DecisionTrace trace={decisionTrace} />
+        )}
       </div>
     );
   }
@@ -154,6 +161,9 @@ export default function ResultCard({ result }) {
         </div>
       )}
 
+      {/* Decision Trace & Explainability Section */}
+      <DecisionTrace trace={decisionTrace} />
+
       {/* Summary */}
       {analysisData.summary && (
         <div style={{ background: 'rgba(11, 15, 25, 0.6)', padding: '1.1rem', borderRadius: '10px', borderLeft: '4px solid var(--accent-blue)', margin: '1.25rem 0' }}>
@@ -180,7 +190,6 @@ export default function ResultCard({ result }) {
           </ul>
         </div>
       )}
-
 
       {/* Educational Disclaimer */}
       <div className="disclaimer-box">

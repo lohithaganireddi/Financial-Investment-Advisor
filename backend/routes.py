@@ -93,12 +93,14 @@ def analyze_query(
     interpreted_res = interpreter.interpret(request.query)
 
     if not interpreted_res.get("success"):
+        analysis_res = orchestrator.run_intent(interpreted_res)
         return {
             "success": False,
             "query": request.query,
             "intent": interpreted_res.get("intent", "UNSUPPORTED"),
             "agents_used": [],
             "agent_activity": [],
+            "decision_trace": analysis_res.get("decision_trace", []),
             "error": interpreted_res.get("error", "Unable to identify a supported financial asset from the query."),
         }
 
@@ -148,6 +150,7 @@ def analyze_query(
         },
         "agents_used": analysis_res.get("agents_used", []),
         "agent_activity": analysis_res.get("agent_activity", []),
+        "decision_trace": analysis_res.get("decision_trace", []),
         "analysis": analysis_res,
         "saved_analysis_id": saved_analysis_id,
     }

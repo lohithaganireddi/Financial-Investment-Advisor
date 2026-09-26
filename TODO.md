@@ -111,7 +111,18 @@
 
 ---
 
-## Future Phase: Advanced Development Roadmap (Days 33 – 45)
+## Day 33: Decision Trace UI / Explainability Layer (Completed ✅)
+- [x] Build reusable `DecisionTrace.jsx` component for visualizing backend `decision_trace`.
+- [x] Support 5-step stock, 5-step crypto, 2-step news, 1-step unsupported halt, and missing trace states.
+- [x] Connect `decision_trace` to `FinancialContext.jsx`, `ResultCard.jsx`, `AgentActivity.jsx`, and `AgentDashboard.jsx`.
+- [x] Expose `decision_trace` in `backend/routes.py` `POST /api/query` response while preserving V1.0 API structure.
+- [x] Verify backend test suite (153 passed).
+- [x] Verify frontend production build (`npm run build`).
+- [x] Perform live end-to-end verification across 6 target queries.
+
+---
+
+## Future Phase: Advanced Development Roadmap (Days 34 – 45)
 - [ ] LLM & Autonomous Reasoning Integration (OpenAI / Gemini API adapters).
 - [ ] Advanced Portfolio Analytics & Interactive Charting (Recharts / Chart.js).
 - [ ] User Authentication & Multi-User Profiles (JWT / FastAPI Security).

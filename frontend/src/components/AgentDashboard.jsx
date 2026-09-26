@@ -16,6 +16,8 @@ import {
   Award
 } from 'lucide-react';
 
+import DecisionTrace from './DecisionTrace';
+
 const FRIENDLY_NAMES = {
   StockAgent: 'Stock Price Agent',
   CryptoAgent: 'Crypto Agent',
@@ -24,7 +26,8 @@ const FRIENDLY_NAMES = {
   PortfolioAgent: 'Portfolio Recommendation Agent'
 };
 
-export default function AgentDashboard({ agentActivity = [], context = null }) {
+export default function AgentDashboard({ agentActivity = [], context = null, decisionTrace = null }) {
+  const trace = decisionTrace || context?.decision_trace || [];
   const totalAgents = agentActivity.length;
   const successfulAgents = agentActivity.filter(a => a.status === 'success').length;
   const failedAgents = agentActivity.filter(a => a.status !== 'success').length;
@@ -179,6 +182,9 @@ export default function AgentDashboard({ agentActivity = [], context = null }) {
           </div>
         </div>
       </div>
+
+      {/* Agentic Decision Trace & Explainability */}
+      <DecisionTrace trace={trace} />
 
       {/* Vertical Execution Timeline */}
       <div className="card">
