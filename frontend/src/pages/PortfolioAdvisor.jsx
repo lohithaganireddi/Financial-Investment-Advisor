@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Briefcase, CheckCircle2, Info, TrendingUp, Coins } from 'lucide-react';
+import { Briefcase, CheckCircle2, Info, TrendingUp, Coins, FileText } from 'lucide-react';
 import { useFinancial } from '../context/FinancialContext';
 import BacktestVisualizer from '../components/BacktestVisualizer';
 import WatchlistWidget from '../components/WatchlistWidget';
+import ExportReportModal from '../components/ExportReportModal';
 
 export default function PortfolioAdvisor() {
   const { result, analysisContext } = useFinancial();
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   const recData = result?.recommendation;
   const recommendation = recData?.recommendation || analysisContext?.recommendation || 'UNKNOWN';
@@ -52,8 +54,17 @@ export default function PortfolioAdvisor() {
             <div className="hero-rec-header">
               <div>
                 <span className="hero-rec-label">Asset: {activeAsset}</span>
-                <div className={`recommendation-badge ${getRecClass(recommendation)}`} style={{ fontSize: '1.5rem', padding: '0.6rem 1.5rem', marginTop: 8 }}>
-                  {recommendation.toUpperCase()}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: 8, flexWrap: 'wrap' }}>
+                  <div className={`recommendation-badge ${getRecClass(recommendation)}`} style={{ fontSize: '1.5rem', padding: '0.6rem 1.5rem' }}>
+                    {recommendation.toUpperCase()}
+                  </div>
+                  <button
+                    onClick={() => setExportModalOpen(true)}
+                    className="tab-btn"
+                    style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: 'rgba(59, 130, 246, 0.4)', color: '#60a5fa', fontWeight: 600 }}
+                  >
+                    <FileText size={15} /> Export Report
+                  </button>
                 </div>
               </div>
 
@@ -121,6 +132,23 @@ export default function PortfolioAdvisor() {
         initialAsset={activeAsset}
         initialAssetType={activeAssetType}
         riskScore={activeRiskScore}
+      />
+
+      <ExportReportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        analysis={{
+          id: result?.saved_analysis_id || result?.id || analysisContext?.saved_analysis_id,
+          asset: activeAsset,
+          asset_type: activeAssetType,
+          recommendation: recommendation,
+          recommendation_score: recScore,
+          confidence: confidence,
+          risk_score: activeRiskScore,
+          factors: factors,
+          agent_activity: result?.agent_activity || [],
+          ...result
+        }}
       />
     </div>
   );

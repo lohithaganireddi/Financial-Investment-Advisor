@@ -1,10 +1,13 @@
-import React from 'react';
-import { Award, ShieldAlert, Newspaper, TrendingUp, Info, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Award, ShieldAlert, Newspaper, TrendingUp, Info, CheckCircle2, AlertTriangle, ShieldCheck, FileText } from 'lucide-react';
 import DecisionTrace from './DecisionTrace';
 import LLMReasoningCard from './LLMReasoningCard';
 import LLMChatAssistant from './LLMChatAssistant';
+import ExportReportModal from './ExportReportModal';
 
 export default function ResultCard({ result }) {
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+
   if (!result) return null;
 
   // Unpack structured or query response
@@ -91,6 +94,13 @@ export default function ResultCard({ result }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setExportModalOpen(true)}
+            className="tab-btn"
+            style={{ padding: '0.45rem 0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: 'rgba(59, 130, 246, 0.4)', color: '#60a5fa', fontWeight: 600 }}
+          >
+            <FileText size={15} /> Export Report
+          </button>
           <span className={`badge ${recBadgeClass}`} style={{ fontSize: '1rem', padding: '0.55rem 1.25rem' }}>
             RECOMMENDATION: {hasRecommendation ? rec.toUpperCase() : 'UNAVAILABLE'}
           </span>
@@ -228,6 +238,24 @@ export default function ResultCard({ result }) {
           {analysisData.disclaimer || recommendationData.disclaimer || 'This is a software-generated educational recommendation produced by autonomous AI agents, not certified financial advice.'}
         </div>
       </div>
+
+      <ExportReportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        analysis={{
+          id: result.saved_analysis_id || analysisData.id,
+          asset: assetName,
+          asset_type: assetType,
+          query: queryPrompt || analysisData.query,
+          recommendation: hasRecommendation ? rec.toUpperCase() : 'N/A',
+          recommendation_score: score,
+          confidence: confidence,
+          risk_score: riskScore,
+          risk_level: riskLevel,
+          agent_activity: agentActivity,
+          ...analysisData
+        }}
+      />
     </div>
   );
 }

@@ -394,3 +394,93 @@ def test_backtest_engine_invalid_inputs():
     assert res_bad_iter["success"] is False
     assert "Iterations must be an integer between 10 and 2000" in res_bad_iter["error"]
 
+
+# ==========================================
+# TelemetryService & ExportService Unit Tests
+# ==========================================
+
+from services.telemetry_service import TelemetryService
+from services.export_service import ExportService
+
+
+def test_telemetry_service_recording_and_metrics():
+    """Test TelemetryService records executions, updates per-agent metrics, and calculates latency."""
+    telemetry = TelemetryService()
+    
+    # Record executions
+    telemetry.record_execution(
+        intent="STOCK_ANALYSIS",
+        duration_ms=150.0,
+        success=True,
+        agent_activity=[
+            {"agent": "StockAgent", "status": "success"},
+            {"agent": "NewsAgent", "status": "success"},
+            {"agent": "RiskAgent", "status": "success"},
+            {"agent": "PortfolioAgent", "status": "success"},
+        ]
+    )
+    
+    telemetry.record_execution(
+        intent="CRYPTO_ANALYSIS",
+        duration_ms=250.0,
+        success=False,
+        agent_activity=[
+            {"agent": "CryptoAgent", "status": "failed"}
+        ]
+    )
+
+    metrics = telemetry.get_metrics()
+    assert metrics["success"] is True
+    assert metrics["total_requests"] == 2
+    assert metrics["successful_requests"] == 1
+    assert metrics["failed_requests"] == 1
+    assert metrics["average_latency_ms"] == 200.0
+    assert metrics["success_rate_percent"] == 50.0
+    assert metrics["health_status"] == "degraded"
+    assert metrics["intent_distribution"]["STOCK_ANALYSIS"] == 1
+    assert metrics["intent_distribution"]["CRYPTO_ANALYSIS"] == 1
+
+    agent_metrics = metrics["per_agent_metrics"]
+    assert agent_metrics["StockAgent"]["calls"] == 1
+    assert agent_metrics["StockAgent"]["successes"] == 1
+    assert agent_metrics["CryptoAgent"]["calls"] == 1
+    assert agent_metrics["CryptoAgent"]["failures"] == 1
+
+
+def test_export_service_json_and_html():
+    """Test ExportService generates structured JSON payloads and HTML reports."""
+    mock_analysis = {
+        "id": 42,
+        "user_id": 1,
+        "query": "Should I invest in Apple?",
+        "asset": "AAPL",
+        "asset_type": "stock",
+        "recommendation": "BUY",
+        "recommendation_score": 85,
+        "confidence": "high",
+        "risk_score": 30,
+        "risk_level": "low",
+        "market_direction": "bullish",
+        "news_sentiment": "positive",
+        "agent_activity": [
+            {"agent": "StockAgent", "status": "success", "summary": "Fetched market data"},
+            {"agent": "RiskAgent", "status": "success", "summary": "Calculated risk score"}
+        ],
+        "created_at": "2026-09-26T12:00:00"
+    }
+
+    # JSON export test
+    json_export = ExportService.generate_json_export(mock_analysis)
+    assert json_export["export_metadata"]["system"] == "SmartFinancial Advisor (FinSight 2.0)"
+    assert json_export["analysis_record"]["asset"] == "AAPL"
+    assert json_export["analysis_record"]["metrics"]["recommendation"] == "BUY"
+
+    # HTML export test
+    html_report = ExportService.generate_html_report(mock_analysis)
+    assert "<!DOCTYPE html>" in html_report
+    assert "FINSIGHT 2.0" in html_report
+    assert "AAPL" in html_report
+    assert "BUY" in html_report
+    assert "StockAgent" in html_report
+
+

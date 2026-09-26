@@ -206,5 +206,29 @@ class LLMChatResponse(BaseModel):
     disclaimer: Optional[str] = Field(default=None, description="Financial disclaimer notice")
 
 
+class AgentTelemetryMetrics(BaseModel):
+    """Schema for individual agent telemetry performance statistics."""
+    calls: int
+    successes: int
+    failures: int
+    total_time_ms: float
+    avg_time_ms: float
+    success_rate: float
+
+
+class TelemetryMetricsResponse(BaseModel):
+    """Response payload schema for GET /api/telemetry/metrics."""
+    success: bool = True
+    total_requests: int
+    successful_requests: int
+    failed_requests: int
+    average_latency_ms: float
+    success_rate_percent: float
+    health_status: str
+    intent_distribution: dict
+    per_agent_metrics: dict
+
+
+
 
 

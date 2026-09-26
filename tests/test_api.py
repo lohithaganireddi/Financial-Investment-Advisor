@@ -592,3 +592,129 @@ def test_backtest_endpoint_invalid_payload():
         app.dependency_overrides.clear()
 
 
+# ==========================================
+# Telemetry & Export Endpoint Tests (Day 44)
+# ==========================================
+
+from backend.routes import get_telemetry_service, get_export_service, get_optional_current_user
+
+
+def test_telemetry_metrics_endpoint():
+    """Test GET /api/telemetry/metrics endpoint."""
+    mock_telemetry = MagicMock()
+    mock_telemetry.get_metrics.return_value = {
+        "success": True,
+        "total_requests": 5,
+        "successful_requests": 5,
+        "failed_requests": 0,
+        "average_latency_ms": 120.0,
+        "success_rate_percent": 100.0,
+        "health_status": "healthy",
+        "intent_distribution": {"STOCK_ANALYSIS": 5},
+        "per_agent_metrics": {}
+    }
+
+    app.dependency_overrides[get_telemetry_service] = lambda: mock_telemetry
+
+    try:
+        response = client.get("/api/telemetry/metrics")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["total_requests"] == 5
+        assert data["health_status"] == "healthy"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_export_analysis_report_json_success():
+    """Test GET /api/export/{analysis_id}?format=json returns structured JSON export."""
+    mock_repo = MagicMock()
+    mock_record = MagicMock()
+    mock_record.id = 10
+    mock_record.user_id = None
+    mock_record.query = "Analyze Apple"
+    mock_record.asset = "AAPL"
+    mock_record.asset_type = "stock"
+    mock_record.news_query = "Apple"
+    mock_record.recommendation = "BUY"
+    mock_record.recommendation_score = 80
+    mock_record.confidence = "high"
+    mock_record.risk_score = 25
+    mock_record.risk_level = "low"
+    mock_record.market_direction = "bullish"
+    mock_record.news_sentiment = "positive"
+    mock_record.agent_activity = []
+    mock_record.created_at = "2026-09-26T12:00:00"
+    mock_repo.get_analysis_by_id.return_value = mock_record
+
+    app.dependency_overrides[get_repository] = lambda: mock_repo
+
+    try:
+        response = client.get("/api/export/10?format=json")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["export_metadata"]["system"] == "SmartFinancial Advisor (FinSight 2.0)"
+        assert data["analysis_record"]["asset"] == "AAPL"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_export_analysis_report_html_success():
+    """Test GET /api/export/{analysis_id}?format=html returns text/html content."""
+    mock_repo = MagicMock()
+    mock_record = MagicMock()
+    mock_record.id = 10
+    mock_record.user_id = None
+    mock_record.query = "Analyze Apple"
+    mock_record.asset = "AAPL"
+    mock_record.asset_type = "stock"
+    mock_record.news_query = "Apple"
+    mock_record.recommendation = "BUY"
+    mock_record.recommendation_score = 80
+    mock_record.confidence = "high"
+    mock_record.risk_score = 25
+    mock_record.risk_level = "low"
+    mock_record.market_direction = "bullish"
+    mock_record.news_sentiment = "positive"
+    mock_record.agent_activity = []
+    mock_record.created_at = "2026-09-26T12:00:00"
+    mock_repo.get_analysis_by_id.return_value = mock_record
+
+    app.dependency_overrides[get_repository] = lambda: mock_repo
+
+    try:
+        response = client.get("/api/export/10?format=html")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "<!DOCTYPE html>" in response.text
+        assert "FINSIGHT 2.0" in response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_export_analysis_report_unauthorized_user():
+    """Test GET /api/export/{analysis_id} returns 403 Forbidden when an authenticated user attempts to export another user's report."""
+    mock_repo = MagicMock()
+    mock_record = MagicMock()
+    mock_record.id = 10
+    mock_record.user_id = 99  # Owned by user 99
+
+    mock_repo.get_analysis_by_id.return_value = mock_record
+
+    # Authenticated user is user ID 1
+    mock_user = MagicMock()
+    mock_user.id = 1
+
+    app.dependency_overrides[get_repository] = lambda: mock_repo
+    app.dependency_overrides[get_optional_current_user] = lambda: mock_user
+
+    try:
+        response = client.get("/api/export/10?format=json")
+        assert response.status_code == 403
+        assert "Forbidden" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+

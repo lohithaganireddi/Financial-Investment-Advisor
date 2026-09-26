@@ -1,7 +1,10 @@
-import React from 'react';
-import { History, RefreshCw, Eye, Database } from 'lucide-react';
+import React, { useState } from 'react';
+import { History, RefreshCw, Eye, Database, FileText } from 'lucide-react';
+import ExportReportModal from './ExportReportModal';
 
 export default function HistoryList({ history, selectedId, onSelectRecord, onRefresh, loading }) {
+  const [exportModalRecord, setExportModalRecord] = useState(null);
+
   if (!history || history.length === 0) {
     return (
       <div className="card">
@@ -92,16 +95,28 @@ export default function HistoryList({ history, selectedId, onSelectRecord, onRef
                   <td style={{ textTransform: 'capitalize' }}>{item.news_sentiment || '-'}</td>
                   <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{createdDate}</td>
                   <td>
-                    <button
-                      className="tab-btn"
-                      style={{ padding: '0.35rem 0.7rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectRecord(item.id);
-                      }}
-                    >
-                      <Eye size={13} /> View
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button
+                        className="tab-btn"
+                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectRecord(item.id);
+                        }}
+                      >
+                        <Eye size={13} /> View
+                      </button>
+                      <button
+                        className="tab-btn"
+                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.25rem', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.4)' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExportModalRecord(item);
+                        }}
+                      >
+                        <FileText size={13} /> Export
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -109,6 +124,12 @@ export default function HistoryList({ history, selectedId, onSelectRecord, onRef
           </tbody>
         </table>
       </div>
+
+      <ExportReportModal
+        isOpen={Boolean(exportModalRecord)}
+        onClose={() => setExportModalRecord(null)}
+        analysis={exportModalRecord}
+      />
     </div>
   );
 }

@@ -5,8 +5,9 @@ Defines backend routes for asset analysis, query interpretation, history persist
 and orchestrator interaction.
 """
 
+import time
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 import json
 from datetime import datetime, timezone
 from backend.schemas import (
@@ -24,6 +25,7 @@ from backend.schemas import (
     WatchlistListResponse,
     LLMSynthesizeRequest,
     LLMChatRequest,
+    TelemetryMetricsResponse,
 )
 from agents.orchestrator import Orchestrator
 from services.query_interpreter import QueryInterpreter
@@ -33,6 +35,8 @@ from services.user_repository import UserRepository
 from services.auth_service import AuthService
 from services.llm_service import LLMService
 from services.ticker_streamer import TickerStreamManager
+from services.telemetry_service import TelemetryService
+from services.export_service import ExportService
 
 router = APIRouter(prefix="/api", tags=["Analysis"])
 
@@ -44,6 +48,8 @@ _default_backtest_engine = BacktestEngine()
 _default_user_repository = UserRepository()
 _default_llm_service = LLMService()
 _default_stream_manager = TickerStreamManager()
+_default_telemetry_service = TelemetryService()
+_default_export_service = ExportService()
 
 
 def get_orchestrator() -> Orchestrator:
@@ -81,6 +87,16 @@ def get_stream_manager() -> TickerStreamManager:
     return _default_stream_manager
 
 
+def get_telemetry_service() -> TelemetryService:
+    """Dependency provider for TelemetryService instance, easily overridable in tests."""
+    return _default_telemetry_service
+
+
+def get_export_service() -> ExportService:
+    """Dependency provider for ExportService instance, easily overridable in tests."""
+    return _default_export_service
+
+
 
 
 
@@ -108,7 +124,8 @@ def get_optional_current_user(
 @router.post("/analyze", response_model=Dict[str, Any])
 def analyze_asset(
     request: AnalyzeRequest,
-    orchestrator: Orchestrator = Depends(get_orchestrator)
+    orchestrator: Orchestrator = Depends(get_orchestrator),
+    telemetry_service: TelemetryService = Depends(get_telemetry_service),
 ) -> Dict[str, Any]:
     """
     Analyze a financial asset (stock or crypto).
@@ -123,10 +140,21 @@ def analyze_asset(
     :param orchestrator: Injected Orchestrator instance.
     :return: Standardized analysis and portfolio recommendation response.
     """
+    start_time = time.time()
     result = orchestrator.run(
         asset_type=request.asset_type,
         asset=request.asset,
         news_query=request.news_query or "finance"
+    )
+    elapsed_ms = (time.time() - start_time) * 1000.0
+    intent = "STOCK_ANALYSIS" if request.asset_type.lower() == "stock" else "CRYPTO_ANALYSIS"
+    is_success = isinstance(result, dict) and result.get("status") == "success"
+    agent_act = result.get("agent_activity", []) if isinstance(result, dict) else []
+    telemetry_service.record_execution(
+        intent=intent,
+        duration_ms=elapsed_ms,
+        success=is_success,
+        agent_activity=agent_act
     )
     return result
 
@@ -138,6 +166,7 @@ def analyze_query(
     orchestrator: Orchestrator = Depends(get_orchestrator),
     repository: AnalysisRepository = Depends(get_repository),
     current_user: Optional[User] = Depends(get_optional_current_user),
+    telemetry_service: TelemetryService = Depends(get_telemetry_service),
 ) -> Dict[str, Any]:
     """
     Analyze a financial query by interpreting user intent and dynamically routing
@@ -157,10 +186,18 @@ def analyze_query(
     :return: Standardized dictionary containing interpreted request, analysis result,
              agents_used list, and saved ID.
     """
+    start_time = time.time()
     interpreted_res = interpreter.interpret(request.query)
 
     if not interpreted_res.get("success"):
         analysis_res = orchestrator.run_intent(interpreted_res)
+        elapsed_ms = (time.time() - start_time) * 1000.0
+        telemetry_service.record_execution(
+            intent=interpreted_res.get("intent", "UNSUPPORTED"),
+            duration_ms=elapsed_ms,
+            success=False,
+            agent_activity=[]
+        )
         return {
             "success": False,
             "query": request.query,
@@ -173,11 +210,21 @@ def analyze_query(
 
     # Delegate all routing logic to Orchestrator.run_intent()
     analysis_res = orchestrator.run_intent(interpreted_res)
+    elapsed_ms = (time.time() - start_time) * 1000.0
+    intent = interpreted_res.get("intent", "UNSUPPORTED")
+    is_success = isinstance(analysis_res, dict) and analysis_res.get("success", False)
+    agent_act = analysis_res.get("agent_activity", []) if isinstance(analysis_res, dict) else []
+
+    telemetry_service.record_execution(
+        intent=intent,
+        duration_ms=elapsed_ms,
+        success=is_success,
+        agent_activity=agent_act
+    )
 
     saved_analysis_id = None
 
     # Persist to DB only for successful stock/crypto full-pipeline analyses
-    intent = interpreted_res.get("intent")
     if (
         isinstance(analysis_res, dict)
         and analysis_res.get("success")
@@ -511,6 +558,62 @@ def chat_llm_financial_assistant(
         )
     return result
 
+
+@router.get("/telemetry/metrics", response_model=TelemetryMetricsResponse)
+def get_telemetry_metrics(
+    telemetry_service: TelemetryService = Depends(get_telemetry_service)
+) -> Dict[str, Any]:
+    """
+    Retrieve aggregate multi-agent telemetry metrics, pipeline latency, agent health,
+    and intent distribution.
+    """
+    return telemetry_service.get_metrics()
+
+
+@router.get("/export/{analysis_id}")
+def export_analysis_report(
+    analysis_id: int,
+    format: str = Query(default="json", description="Export format: 'json' or 'html'"),
+    repository: AnalysisRepository = Depends(get_repository),
+    export_service: ExportService = Depends(get_export_service),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    """
+    Export a saved financial analysis record as structured JSON or print-ready HTML.
+    Enforces user ownership security checks if requested by an authenticated user.
+    """
+    record = repository.get_analysis_by_id(analysis_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Analysis record #{analysis_id} not found.")
+
+    # Day 42 Security Check: If record is bound to a user, enforce ownership
+    if record.user_id is not None:
+        if current_user and current_user.id != record.user_id:
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to export this report.")
+
+    analysis_dict = {
+        "id": record.id,
+        "user_id": record.user_id,
+        "query": record.query,
+        "asset": record.asset,
+        "asset_type": record.asset_type,
+        "news_query": record.news_query,
+        "recommendation": record.recommendation,
+        "recommendation_score": record.recommendation_score,
+        "confidence": record.confidence,
+        "risk_score": record.risk_score,
+        "risk_level": record.risk_level,
+        "market_direction": record.market_direction,
+        "news_sentiment": record.news_sentiment,
+        "agent_activity": record.agent_activity,
+        "created_at": record.created_at,
+    }
+
+    if str(format).lower() == "html":
+        html_content = export_service.generate_html_report(analysis_dict)
+        return Response(content=html_content, media_type="text/html")
+
+    return export_service.generate_json_export(analysis_dict)
 
 
 @router.websocket("/ws/ticker")

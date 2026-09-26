@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-09-26 (Day 44: System Telemetry Analytics, Performance Monitoring & Financial Report Exporter)
+
+### Added
+- **Multi-Agent Performance Telemetry Service**: Created `services/telemetry_service.py` (`TelemetryService`) to track aggregate pipeline latency, request volume, success/failure counts, intent distribution, and per-agent execution statistics safely without interrupting analysis requests.
+- **Financial Analysis Report Exporter**: Created `services/export_service.py` (`ExportService`) to generate structured JSON payloads and print-ready HTML/PDF executive reports with custom styling, recommendation cards, agent breakdowns, and regulatory disclaimers.
+- **Telemetry & Report Export REST Endpoints**: Implemented `GET /api/telemetry/metrics` and `GET /api/export/{analysis_id}` in `backend/routes.py`, enforcing Day 42 security authorization checks (403 Forbidden for unauthorized user report exports).
+- **Interactive Report Export UI Component**: Built `frontend/src/components/ExportReportModal.jsx` and embedded export actions into `ResultCard.jsx`, `AnalysisHistory.jsx` (`HistoryList.jsx`), and `PortfolioAdvisor.jsx` for one-click JSON downloading and print-ready HTML report generation.
+- **System Telemetry Dashboard**: Updated `frontend/src/pages/AgentActivity.jsx` with real-time system performance cards (Average Pipeline Latency, Total Requests, Health Status, Success Rate %) and per-agent telemetry statistics.
+- **Unit & Integration Test Coverage**: Added comprehensive test cases in `tests/test_services.py` and `tests/test_api.py` bringing total passing backend test suite to 191 tests.
+
 ## [2.3.0] - 2026-09-26 (Day 43: Interactive Conversational LLM Financial Assistant & Multi-Turn Chat Engine)
 
 ### Added
