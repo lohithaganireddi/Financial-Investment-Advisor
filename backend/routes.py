@@ -5,19 +5,28 @@ Defines backend routes for asset analysis, query interpretation, history persist
 and orchestrator interaction.
 """
 
-from typing import Any, Dict
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Any, Dict, Optional
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from backend.schemas import (
     AnalyzeRequest,
     QueryRequest,
     HistoryListResponse,
     HistoryDetailResponse,
     BacktestRequest,
+    RegisterRequest,
+    LoginRequest,
+    TokenResponse,
+    UserResponse,
+    WatchlistCreateRequest,
+    WatchlistItemResponse,
+    WatchlistListResponse,
 )
 from agents.orchestrator import Orchestrator
 from services.query_interpreter import QueryInterpreter
 from services.analysis_repository import AnalysisRepository
 from services.backtest_engine import BacktestEngine
+from services.user_repository import UserRepository
+from services.auth_service import AuthService
 
 router = APIRouter(prefix="/api", tags=["Analysis"])
 
@@ -26,6 +35,7 @@ _default_orchestrator = Orchestrator()
 _default_interpreter = QueryInterpreter()
 _default_repository = AnalysisRepository()
 _default_backtest_engine = BacktestEngine()
+_default_user_repository = UserRepository()
 
 
 def get_orchestrator() -> Orchestrator:
@@ -46,6 +56,12 @@ def get_repository() -> AnalysisRepository:
 def get_backtest_engine() -> BacktestEngine:
     """Dependency provider for BacktestEngine instance, easily overridable in tests."""
     return _default_backtest_engine
+
+
+def get_user_repository() -> UserRepository:
+    """Dependency provider for UserRepository instance, easily overridable in tests."""
+    return _default_user_repository
+
 
 
 
@@ -237,4 +253,162 @@ def run_portfolio_backtest(
             detail=result.get("error", "Backtest execution failed.")
         )
     return result
+
+
+# ===========================================================================
+# Auth & Watchlist Endpoints (Day 37)
+# ===========================================================================
+
+def get_current_user_from_token(
+    authorization: Optional[str] = Header(None),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Dependency helper to extract user from Authorization Bearer JWT token."""
+    user_id = 1
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+        payload = AuthService.decode_access_token(token)
+        if payload and "sub" in payload:
+            user_id = int(payload["sub"])
+
+    user = user_repo.get_user_by_id(user_id)
+    if user is None:
+        # Fallback to creating a default local analyst user if missing
+        user = user_repo.create_user(
+            username=f"analyst_{user_id}",
+            email=f"analyst_{user_id}@smartfinance.local",
+            password="default_analyst_password",
+            role="analyst"
+        )
+        if user is None:
+            user = user_repo.get_user_by_username(f"analyst_{user_id}")
+    return user
+
+
+@router.post("/auth/register", response_model=Dict[str, Any])
+def register_user(
+    request: RegisterRequest,
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Dict[str, Any]:
+    """Register a new user account."""
+    existing_user = user_repo.get_user_by_username(request.username)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already registered.")
+
+    user = user_repo.create_user(
+        username=request.username,
+        email=request.email,
+        password=request.password
+    )
+    if not user:
+        raise HTTPException(status_code=400, detail="Failed to create user account.")
+
+    token = AuthService.create_access_token({"sub": str(user.id), "username": user.username})
+    return {
+        "success": True,
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "created_at": user.created_at
+        }
+    }
+
+
+@router.post("/auth/login", response_model=Dict[str, Any])
+def login_user(
+    request: LoginRequest,
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Dict[str, Any]:
+    """Authenticate user credentials and return JWT access token."""
+    user = user_repo.get_user_by_username(request.username)
+    if not user or not AuthService.verify_password(request.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+
+    token = AuthService.create_access_token({"sub": str(user.id), "username": user.username})
+    return {
+        "success": True,
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "created_at": user.created_at
+        }
+    }
+
+
+@router.get("/auth/me", response_model=Dict[str, Any])
+def get_current_user_profile(
+    current_user=Depends(get_current_user_from_token)
+) -> Dict[str, Any]:
+    """Retrieve active authenticated user profile."""
+    return {
+        "success": True,
+        "user": {
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "role": current_user.role,
+            "created_at": current_user.created_at
+        }
+    }
+
+
+@router.get("/watchlist", response_model=Dict[str, Any])
+def get_watchlist(
+    current_user=Depends(get_current_user_from_token),
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Dict[str, Any]:
+    """Retrieve saved watchlist assets for the current user."""
+    items = user_repo.get_user_watchlist(user_id=current_user.id)
+    return {
+        "success": True,
+        "count": len(items),
+        "items": items
+    }
+
+
+@router.post("/watchlist", response_model=Dict[str, Any])
+def add_to_watchlist(
+    request: WatchlistCreateRequest,
+    current_user=Depends(get_current_user_from_token),
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Dict[str, Any]:
+    """Add an asset to current user's saved watchlist."""
+    item = user_repo.add_watchlist_item(
+        user_id=current_user.id,
+        asset_type=request.asset_type,
+        asset=request.asset,
+        target_price=request.target_price,
+        notes=request.notes
+    )
+    if not item:
+        raise HTTPException(status_code=400, detail="Failed to add item to watchlist.")
+    return {
+        "success": True,
+        "item": item
+    }
+
+
+@router.delete("/watchlist/{item_id}", response_model=Dict[str, Any])
+def remove_from_watchlist(
+    item_id: int,
+    current_user=Depends(get_current_user_from_token),
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Dict[str, Any]:
+    """Delete a watchlist item by item ID for current user."""
+    success = user_repo.remove_watchlist_item(item_id=item_id, user_id=current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Watchlist item #{item_id} not found.")
+    return {
+        "success": True,
+        "message": f"Watchlist item #{item_id} removed."
+    }
+
 

@@ -1,7 +1,7 @@
 """
 SQLAlchemy Database Models
 
-Defines the database schema for persisting financial analyses.
+Defines the database schema for persisting financial analyses, user profiles, and watchlists.
 """
 
 from datetime import datetime, timezone
@@ -34,3 +34,39 @@ class Analysis(Base):
         nullable=False
     )
 
+
+class User(Base):
+    """
+    SQLAlchemy model representing a registered user account.
+    """
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="analyst", nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+
+class Watchlist(Base):
+    """
+    SQLAlchemy model representing a user's saved asset watchlist item.
+    """
+    __tablename__ = "watchlists"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    asset_type = Column(String, nullable=False)
+    asset = Column(String, nullable=False, index=True)
+    target_price = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
+    added_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )

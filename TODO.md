@@ -157,9 +157,21 @@
 
 ---
 
-## Future Phase: Advanced Development Roadmap (Days 37 – 45)
+## Day 37: User Authentication, Profile Security & Saved Watchlist Preferences Engine (Completed ✅)
+- [x] Create `services/auth_service.py` for PBKDF2 password hashing and HMAC-SHA256 JWT access token generation and signature verification.
+- [x] Add SQLAlchemy `User` and `Watchlist` database models to `backend/models.py`.
+- [x] Create `services/user_repository.py` for user registration, lookup, and watchlist CRUD persistence.
+- [x] Add Pydantic schemas in `backend/schemas.py` (`RegisterRequest`, `LoginRequest`, `UserResponse`, `TokenResponse`, `WatchlistCreateRequest`, `WatchlistItemResponse`, `WatchlistListResponse`).
+- [x] Add Auth & Watchlist REST endpoints in `backend/routes.py` (`POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, `GET /api/watchlist`, `POST /api/watchlist`, `DELETE /api/watchlist/{id}`).
+- [x] Update `frontend/src/pages/Settings.jsx` with registration/login authentication, JWT status badge, profile overview, and watchlist management.
+- [x] Create `tests/test_auth.py` bringing test suite to 170 passed.
+- [x] Verify backend pytest test suite (170 passed).
+- [x] Verify frontend production build (`npm run build`).
+
+---
+
+## Future Phase: Advanced Development Roadmap (Days 38 – 45)
 - [ ] LLM & Autonomous Reasoning Integration (OpenAI / Gemini API adapters).
-- [ ] User Authentication & Multi-User Profiles (JWT / FastAPI Security).
 - [ ] WebSockets for Real-Time Ticker Streaming.
 - [ ] Dockerization & Production Cloud Deployment.
 

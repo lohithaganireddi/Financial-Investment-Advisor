@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-26 (Day 37: User Authentication, Profile Security & Saved Watchlist Preferences Engine)
+
+### Added
+- **Password Hashing & JWT Security**: Implemented `AuthService` (`services/auth_service.py`) providing PBKDF2-HMAC-SHA256 password hashing and HMAC-SHA256 JWT access token generation and signature verification.
+- **SQLAlchemy User & Watchlist Models**: Added `User` and `Watchlist` models to `backend/models.py` and `UserRepository` (`services/user_repository.py`) for database persistence in `smartfinance.db`.
+- **Auth & Watchlist REST Endpoints**: Implemented `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, `GET /api/watchlist`, `POST /api/watchlist`, and `DELETE /api/watchlist/{id}` in `backend/routes.py` with validation models in `backend/schemas.py`.
+- **User Settings & Watchlist UI**: Updated `frontend/src/pages/Settings.jsx` with user registration, login authentication, active JWT status badge, profile overview, and saved portfolio watchlist management.
+- **Auth Unit & API Tests**: Added `tests/test_auth.py` bringing the total passing backend test suite from 163 to 170 tests.
+
 ## [1.6.0] - 2026-09-26 (Day 36: Portfolio Backtesting & Monte Carlo Simulation Engine)
 
 ### Added

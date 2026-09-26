@@ -115,3 +115,64 @@ class BacktestRequest(BaseModel):
     risk_score: Optional[int] = Field(default=None, description="Optional risk score (0-100) to adjust volatility", examples=[35])
     seed: Optional[int] = Field(default=42, description="Pseudo-random seed for deterministic testing", examples=[42])
 
+
+class RegisterRequest(BaseModel):
+    """Request payload schema for user registration."""
+    username: str = Field(..., min_length=3, max_length=30, description="Unique username")
+    email: str = Field(..., description="Unique email address")
+    password: str = Field(..., min_length=4, description="User password")
+
+
+class LoginRequest(BaseModel):
+    """Request payload schema for user login authentication."""
+    username: str = Field(..., description="Username")
+    password: str = Field(..., description="Password")
+
+
+class UserResponse(BaseModel):
+    """Response schema representing a user profile."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    email: str
+    role: str
+    created_at: Optional[datetime] = None
+
+
+class TokenResponse(BaseModel):
+    """Response schema for successful login returning JWT access token."""
+    success: bool = True
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class WatchlistCreateRequest(BaseModel):
+    """Request payload schema for adding asset to user watchlist."""
+    asset_type: str = Field(..., description="Asset type: 'stock' or 'crypto'")
+    asset: str = Field(..., description="Asset ticker symbol or coin ID")
+    target_price: Optional[str] = Field(default=None, description="Optional target price alert threshold")
+    notes: Optional[str] = Field(default=None, description="Optional watchlist notes")
+
+
+class WatchlistItemResponse(BaseModel):
+    """Response schema representing a single watchlist item."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    asset_type: str
+    asset: str
+    target_price: Optional[str] = None
+    notes: Optional[str] = None
+    added_at: Optional[datetime] = None
+
+
+class WatchlistListResponse(BaseModel):
+    """Response schema for GET /api/watchlist."""
+    success: bool = True
+    count: int
+    items: List[WatchlistItemResponse]
+
+
