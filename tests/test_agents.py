@@ -2496,4 +2496,133 @@ def test_day32_existing_day31_decision_flags_retained():
     assert ctx.decision_trace[0]["step"] == 1
 
 
+# ==========================================
+# Day 34 — Failure Handling & Resilience Tests
+# ==========================================
+
+def test_day34_error_sanitizer_redacts_credentials_and_file_paths():
+    """Verify _sanitize_error_message redacts API keys, local file paths, and raw stack traces."""
+    from agents.orchestrator import _sanitize_error_message
+
+    raw_path_err = r"Failed reading C:\Users\91846\SecretProject\key.json file"
+    clean_path_err = _sanitize_error_message(raw_path_err)
+    assert r"C:\Users\91846\SecretProject\key.json" not in clean_path_err
+    assert "[file path]" in clean_path_err
+
+    raw_key_err = "API request failed with api_key=SECRET_TOKEN_12345&symbol=AAPL"
+    clean_key_err = _sanitize_error_message(raw_key_err)
+    assert "SECRET_TOKEN_12345" not in clean_key_err
+    assert "api_key=[REDACTED]" in clean_key_err
+
+    raw_tb_err = (
+        "Traceback (most recent call last):\n"
+        "  File 'C:\\Users\\app\\server.py', line 42, in run\n"
+        "ConnectionError: Host unreachable"
+    )
+    clean_tb_err = _sanitize_error_message(raw_tb_err)
+    assert "Traceback" not in clean_tb_err
+    assert "ConnectionError: Host unreachable" in clean_tb_err
+
+
+def test_day34_stock_agent_exception_sanitizes_error_and_halts_pipeline():
+    """When StockAgent raises an exception containing sensitive path info, sanitization occurs and execution halts."""
+    orch, mock_stock, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent()
+    mock_stock.analyze_stock.side_effect = Exception(r"Database error at C:\Users\Admin\secrets.db")
+
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+    assert res["success"] is False
+    assert r"C:\Users\Admin\secrets.db" not in res["error"]
+    assert "[file path]" in res["error"]
+
+    trace = res["decision_trace"]
+    assert len(trace) == 2
+    assert trace[1]["agent"] == "StockAgent"
+    assert trace[1]["result"] == "failed"
+    assert "Stop analysis" in trace[1]["next_decision"]
+
+    mock_news.analyze_news.assert_not_called()
+    mock_risk.analyze_risk.assert_not_called()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day34_news_agent_exception_sanitizes_error_and_blocks_portfolio():
+    """When NewsAgent raises an exception, error is sanitized, RiskAgent runs, and PortfolioAgent is blocked."""
+    orch, _, _, mock_news, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        risk_result=_make_risk_data("low"),
+    )
+    mock_news.analyze_news.side_effect = Exception("News API quota exceeded with apikey=PRIVATE_KEY_999")
+
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+    assert res["success"] is True  # Market & Risk succeeded
+    assert res["recommendation"] is None  # Portfolio recommendation blocked
+
+    trace = res["decision_trace"]
+    assert len(trace) == 5
+    # News trace step (failed & sanitized)
+    assert trace[2]["agent"] == "NewsAgent"
+    assert trace[2]["result"] == "failed"
+    assert "PRIVATE_KEY_999" not in trace[2]["reason"]
+    # Portfolio trace step (blocked)
+    assert trace[4]["agent"] == "PortfolioAgent"
+    assert trace[4]["action"] == "block_recommendation"
+    assert trace[4]["result"] == "blocked"
+
+    mock_risk.analyze_risk.assert_called_once()
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day34_risk_agent_failure_halts_portfolio():
+    """When RiskAgent returns failure, response is marked unsuccessful and PortfolioAgent is skipped."""
+    orch, _, _, _, mock_risk, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result={"success": False, "agent": "RiskAgent", "error": "Volatility model invalid"},
+    )
+
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+    assert res["success"] is False
+    assert res["error"] == "Volatility model invalid"
+
+    trace = res["decision_trace"]
+    assert len(trace) == 4
+    assert trace[3]["agent"] == "RiskAgent"
+    assert trace[3]["result"] == "failed"
+
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day34_portfolio_agent_exception_sanitizes_error_and_returns_unsuccessful():
+    """When PortfolioAgent throws an exception, error is sanitized and response returns success=False."""
+    orch, _, _, _, _, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("low"),
+    )
+    mock_portfolio.generate_recommendation.side_effect = Exception(r"Internal portfolio matrix crash at /var/secrets/keys.pem")
+
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+    assert res["success"] is False
+    assert r"/var/secrets/keys.pem" not in res["error"]
+    assert "[file path]" in res["error"]
+
+    trace = res["decision_trace"]
+    assert len(trace) == 5
+    assert trace[4]["agent"] == "PortfolioAgent"
+    assert trace[4]["result"] == "failed"
+
+
+
 

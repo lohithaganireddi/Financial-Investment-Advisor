@@ -35,6 +35,7 @@ Agentic Workflow & Decision Logic
    - Risk Agent Failure   -> HALT. PortfolioAgent requires verified risk metrics.
 """
 
+import re
 import time
 from typing import Any, Dict, Optional
 
@@ -44,6 +45,26 @@ from agents.crypto_agent import CryptoAgent
 from agents.news_agent import NewsAgent
 from agents.risk_agent import RiskAgent
 from agents.portfolio_agent import PortfolioAgent
+
+
+def _sanitize_error_message(err: Any) -> str:
+    """
+    Sanitize operational error messages to avoid leaking filesystem paths,
+    internal stack traces, API keys, or raw credentials to frontend or user.
+    """
+    if not err:
+        return "An operational error occurred during analysis execution."
+    msg = str(err)
+    # Strip raw traceback header/footer lines if present
+    if "Traceback (most recent call last)" in msg:
+        lines = [l.strip() for l in msg.splitlines() if l.strip()]
+        msg = lines[-1] if lines else "Unexpected internal error."
+    # Redact Windows or Unix file paths
+    msg = re.sub(r"[A-Za-z]:\\[^\s'\"]+", "[file path]", msg)
+    msg = re.sub(r"/(?:[^\s'\"]+/)+[^\s'\"]+", "[file path]", msg)
+    # Redact potential API keys or passwords
+    msg = re.sub(r"(apikey|api_key|token|secret|password|auth)=[\w\-]+", r"\1=[REDACTED]", msg, flags=re.IGNORECASE)
+    return msg.strip()
 
 
 class Orchestrator:
@@ -354,22 +375,23 @@ class Orchestrator:
                 duration_ms = int((time.monotonic() - t0) * 1000)
             except Exception as exc:
                 duration_ms = int((time.monotonic() - t0) * 1000)
+                clean_err = _sanitize_error_message(exc)
                 ctx.update_decision_flags()
                 ctx.record_trace(
                     agent=market_agent_name,
                     action="analyze_market",
-                    reason=f"Market data exception: {exc}",
+                    reason=f"Market data exception: {clean_err}",
                     result="failed",
                     next_decision="Stop analysis because market context is unavailable",
                 )
                 ctx.record_activity(
                     agent=market_agent_name,
                     status="failed",
-                    summary=f"{market_agent_name} error: {exc}",
+                    summary=f"{market_agent_name} error: {clean_err}",
                     decision="Market agent exception; halting dependent pipeline.",
                     duration_ms=duration_ms,
                 )
-                ctx.log_decision(f"{market_agent_name} raised exception: {exc}. Halting pipeline.")
+                ctx.log_decision(f"{market_agent_name} raised exception: {clean_err}. Halting pipeline.")
                 return {
                     "success": False,
                     "agent": "Orchestrator",
@@ -377,25 +399,26 @@ class Orchestrator:
                     "agents_used": ctx.agents_used,
                     "agent_activity": ctx.agent_activity,
                     "decision_trace": list(ctx.decision_trace),
-                    "error": f"Market agent raised an unexpected error: {exc}",
+                    "error": f"Market agent operational failure: {clean_err}",
                 }
 
             ctx.market_data = market_data
 
             if not ctx.market_succeeded():
                 ctx.update_decision_flags()
-                err_text = market_data.get("error", "Market data fetch failed")
+                raw_err = market_data.get("error", "Market data fetch failed")
+                clean_err = _sanitize_error_message(raw_err)
                 ctx.record_trace(
                     agent=market_agent_name,
                     action="analyze_market",
-                    reason=f"Stock market data unavailable ({err_text})" if asset_type == "stock" else f"Crypto market data unavailable ({err_text})",
+                    reason=f"Stock market data unavailable ({clean_err})" if asset_type == "stock" else f"Crypto market data unavailable ({clean_err})",
                     result="failed",
                     next_decision="Stop analysis because market context is unavailable",
                 )
                 ctx.record_activity(
                     agent=market_agent_name,
                     status="failed",
-                    summary=f"{market_agent_name} failed: {err_text}",
+                    summary=f"{market_agent_name} failed: {clean_err}",
                     decision="Market data fetch failed; halting risk and portfolio agents.",
                     duration_ms=duration_ms,
                 )
@@ -408,7 +431,7 @@ class Orchestrator:
                     "agent_activity": ctx.agent_activity,
                     "decision_trace": list(ctx.decision_trace),
                     "step": "market_agent",
-                    "error": err_text,
+                    "error": clean_err,
                     "market_data": market_data,
                 }
 
@@ -465,7 +488,8 @@ class Orchestrator:
                         ctx.log_decision(f"NewsAgent succeeded ({sentiment} sentiment). Updated news decision flags.")
                     else:
                         ctx.update_decision_flags()
-                        err_news = res_news.get("error", "News agent failure")
+                        raw_news = res_news.get("error", "News agent failure")
+                        err_news = _sanitize_error_message(raw_news)
                         ctx.record_trace(
                             agent="NewsAgent",
                             action="analyze_news",
@@ -487,19 +511,20 @@ class Orchestrator:
                         ctx.log_decision("NewsAgent failed. Portfolio recommendation will be blocked because valid news context is required.")
                 except Exception as exc:
                     duration_ms = int((time.monotonic() - t0) * 1000)
-                    ctx.news_data = {"success": False, "agent": "NewsAgent", "error": str(exc)}
+                    clean_err = _sanitize_error_message(exc)
+                    ctx.news_data = {"success": False, "agent": "NewsAgent", "error": clean_err}
                     ctx.update_decision_flags()
                     ctx.record_trace(
                         agent="NewsAgent",
                         action="analyze_news",
-                        reason=f"News context unavailable ({exc})",
+                        reason=f"News context unavailable ({clean_err})",
                         result="failed",
                         next_decision="Proceed to RiskAgent; PortfolioAgent will be blocked",
                     )
                     ctx.record_activity(
                         agent="NewsAgent",
                         status="failed",
-                        summary=f"NewsAgent error: {exc}",
+                        summary=f"NewsAgent error: {clean_err}",
                         decision=(
                             "NewsAgent raised an exception; news context is unavailable. "
                             "Continuing to RiskAgent. "
@@ -507,7 +532,7 @@ class Orchestrator:
                         ),
                         duration_ms=duration_ms,
                     )
-                    ctx.log_decision(f"NewsAgent raised exception ({exc}). Portfolio recommendation will be blocked.")
+                    ctx.log_decision(f"NewsAgent raised exception ({clean_err}). Portfolio recommendation will be blocked.")
             else:
                 ctx.record_trace(
                     agent="NewsAgent",
@@ -552,7 +577,8 @@ class Orchestrator:
                         ctx.log_decision(f"RiskAgent succeeded (score {r_score}, level {r_level}). Risk decision flags updated.")
                     else:
                         ctx.update_decision_flags()
-                        err_risk = res_risk.get("error", "Risk agent failure")
+                        raw_risk = res_risk.get("error", "Risk agent failure")
+                        err_risk = _sanitize_error_message(raw_risk)
                         ctx.record_trace(
                             agent="RiskAgent",
                             action="evaluate_risk",
@@ -583,22 +609,23 @@ class Orchestrator:
                         }
                 except Exception as exc:
                     duration_ms = int((time.monotonic() - t0) * 1000)
+                    clean_err = _sanitize_error_message(exc)
                     ctx.update_decision_flags()
                     ctx.record_trace(
                         agent="RiskAgent",
                         action="evaluate_risk",
-                        reason=f"Risk analysis exception: {exc}",
+                        reason=f"Risk analysis exception: {clean_err}",
                         result="failed",
                         next_decision="Stop analysis because risk context is unavailable",
                     )
                     ctx.record_activity(
                         agent="RiskAgent",
                         status="failed",
-                        summary=f"RiskAgent error: {exc}",
+                        summary=f"RiskAgent error: {clean_err}",
                         decision="RiskAgent exception; halting portfolio recommendation.",
                         duration_ms=duration_ms,
                     )
-                    ctx.log_decision(f"RiskAgent raised exception ({exc}). Halting portfolio recommendation.")
+                    ctx.log_decision(f"RiskAgent raised exception ({clean_err}). Halting portfolio recommendation.")
                     return {
                         "success": False,
                         "agent": "Orchestrator",
@@ -606,7 +633,7 @@ class Orchestrator:
                         "agents_used": ctx.agents_used,
                         "agent_activity": ctx.agent_activity,
                         "decision_trace": list(ctx.decision_trace),
-                        "error": f"Risk agent raised an unexpected error: {exc}",
+                        "error": f"Risk agent operational failure: {clean_err}",
                     }
             else:
                 ctx.record_trace(
@@ -655,7 +682,8 @@ class Orchestrator:
                         ctx.log_decision(f"PortfolioAgent succeeded (recommendation {rec_str}, confidence {conf_str}). Context complete.")
                     else:
                         ctx.update_decision_flags()
-                        err_rec = res_rec.get("error", "Portfolio recommendation failure")
+                        raw_rec = res_rec.get("error", "Portfolio recommendation failure")
+                        err_rec = _sanitize_error_message(raw_rec)
                         ctx.record_trace(
                             agent="PortfolioAgent",
                             action="generate_recommendation",
@@ -687,22 +715,23 @@ class Orchestrator:
                         }
                 except Exception as exc:
                     duration_ms = int((time.monotonic() - t0) * 1000)
+                    clean_err = _sanitize_error_message(exc)
                     ctx.update_decision_flags()
                     ctx.record_trace(
                         agent="PortfolioAgent",
                         action="generate_recommendation",
-                        reason=f"PortfolioAgent exception: {exc}",
+                        reason=f"PortfolioAgent exception: {clean_err}",
                         result="failed",
                         next_decision="Complete analysis with portfolio exception error",
                     )
                     ctx.record_activity(
                         agent="PortfolioAgent",
                         status="failed",
-                        summary=f"PortfolioAgent error: {exc}",
+                        summary=f"PortfolioAgent error: {clean_err}",
                         decision="PortfolioAgent exception.",
                         duration_ms=duration_ms,
                     )
-                    ctx.log_decision(f"PortfolioAgent raised exception ({exc}).")
+                    ctx.log_decision(f"PortfolioAgent raised exception ({clean_err}).")
                     return {
                         "success": False,
                         "agent": "Orchestrator",
@@ -710,7 +739,7 @@ class Orchestrator:
                         "agents_used": ctx.agents_used,
                         "agent_activity": ctx.agent_activity,
                         "decision_trace": list(ctx.decision_trace),
-                        "error": f"Portfolio agent raised an unexpected error: {exc}",
+                        "error": f"Portfolio agent operational failure: {clean_err}",
                     }
             else:
                 ctx.update_decision_flags()

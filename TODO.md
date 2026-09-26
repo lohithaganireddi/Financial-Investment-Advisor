@@ -122,7 +122,18 @@
 
 ---
 
-## Future Phase: Advanced Development Roadmap (Days 34 – 45)
+## Day 34: Agent Failure Handling & Resilience Layer (Completed ✅)
+- [x] Implement error sanitizer `_sanitize_error_message` in `agents/orchestrator.py` to redact API keys, credentials, local OS paths, and stack traces.
+- [x] Record standardized failure boundaries (`result: "failed"`, `result: "blocked"`) in `decision_trace` across Market, News, Risk, and Portfolio agents.
+- [x] Preserve partial market and risk context when downstream news or portfolio agents fail/block.
+- [x] Update `frontend/src/components/ResultCard.jsx` to render `RECOMMENDATION: UNAVAILABLE` badge and clear explanations when recommendations are blocked.
+- [x] Add Day 34 resilience unit tests bringing total passing pytest suite to 158 passed.
+- [x] Verify frontend production build (`npm run build`).
+- [x] Verify live end-to-end queries and failure boundary scenarios.
+
+---
+
+## Future Phase: Advanced Development Roadmap (Days 35 – 45)
 - [ ] LLM & Autonomous Reasoning Integration (OpenAI / Gemini API adapters).
 - [ ] Advanced Portfolio Analytics & Interactive Charting (Recharts / Chart.js).
 - [ ] User Authentication & Multi-User Profiles (JWT / FastAPI Security).

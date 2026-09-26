@@ -27,14 +27,20 @@ export default function ResultCard({ result }) {
     );
   }
 
-  const recommendationData = analysisData.recommendation || {};
+  const hasRecommendation = Boolean(
+    analysisData.recommendation &&
+    analysisData.recommendation.success !== false &&
+    analysisData.recommendation.recommendation
+  );
+
+  const recommendationData = hasRecommendation ? analysisData.recommendation : {};
   const marketData = analysisData.market_data || {};
   const riskData = analysisData.risk_data || {};
   const newsData = analysisData.news_data || {};
 
-  const rec = (recommendationData.recommendation || 'hold').toLowerCase();
-  const confidence = (recommendationData.confidence || 'medium').toLowerCase();
-  const score = recommendationData.recommendation_score ?? 50;
+  const rec = hasRecommendation ? String(recommendationData.recommendation).toLowerCase() : 'unavailable';
+  const confidence = hasRecommendation ? String(recommendationData.confidence || 'medium').toLowerCase() : 'n/a';
+  const score = hasRecommendation ? recommendationData.recommendation_score ?? null : null;
 
   const assetName = analysisData.asset || marketData.symbol || marketData.coin_id || 'Asset';
   const assetType = (analysisData.asset_type || 'asset').toUpperCase();
@@ -42,8 +48,21 @@ export default function ResultCard({ result }) {
   const price = marketData.price;
   const changePct = marketData.change_percent ?? marketData.change_percent_24h;
 
-  const recBadgeClass = rec === 'buy' ? 'badge-buy' : rec === 'avoid' ? 'badge-avoid' : 'badge-hold';
-  const recColor = rec === 'buy' ? 'var(--green-buy)' : rec === 'avoid' ? 'var(--red-avoid)' : 'var(--amber-hold)';
+  const recBadgeClass = !hasRecommendation
+    ? 'badge-conf'
+    : rec === 'buy'
+    ? 'badge-buy'
+    : rec === 'avoid'
+    ? 'badge-avoid'
+    : 'badge-hold';
+
+  const recColor = !hasRecommendation
+    ? 'var(--text-muted)'
+    : rec === 'buy'
+    ? 'var(--green-buy)'
+    : rec === 'avoid'
+    ? 'var(--red-avoid)'
+    : 'var(--amber-hold)';
 
   const riskScore = riskData.risk_score ?? 50;
   const riskLevel = (riskData.risk_level || 'medium').toLowerCase();
@@ -71,9 +90,11 @@ export default function ResultCard({ result }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <span className={`badge ${recBadgeClass}`} style={{ fontSize: '1rem', padding: '0.55rem 1.25rem' }}>
-            RECOMMENDATION: {rec.toUpperCase()}
+            RECOMMENDATION: {hasRecommendation ? rec.toUpperCase() : 'UNAVAILABLE'}
           </span>
-          <span className="badge badge-conf">Confidence: {confidence.toUpperCase()}</span>
+          {hasRecommendation && (
+            <span className="badge badge-conf">Confidence: {confidence.toUpperCase()}</span>
+          )}
         </div>
       </div>
 
@@ -165,14 +186,14 @@ export default function ResultCard({ result }) {
       <DecisionTrace trace={decisionTrace} />
 
       {/* Summary */}
-      {analysisData.summary && (
-        <div style={{ background: 'rgba(11, 15, 25, 0.6)', padding: '1.1rem', borderRadius: '10px', borderLeft: '4px solid var(--accent-blue)', margin: '1.25rem 0' }}>
-          <strong style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Executive Agent Summary
-          </strong>
-          <p style={{ fontSize: '0.95rem', lineHeight: '1.5' }}>{analysisData.summary}</p>
-        </div>
-      )}
+      <div style={{ background: 'rgba(11, 15, 25, 0.6)', padding: '1.1rem', borderRadius: '10px', borderLeft: `4px solid ${hasRecommendation ? 'var(--accent-blue)' : 'var(--amber-hold)'}`, margin: '1.25rem 0' }}>
+        <strong style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Executive Agent Summary
+        </strong>
+        <p style={{ fontSize: '0.95rem', lineHeight: '1.5' }}>
+          {analysisData.summary || (!hasRecommendation ? 'Portfolio recommendation is unavailable because required prerequisite context (such as news or risk evaluation) was missing or failed. Market and risk metrics evaluated prior to pipeline block are preserved below.' : 'No summary provided.')}
+        </p>
+      </div>
 
       {/* Key Factors */}
       {recommendationData.factors && recommendationData.factors.length > 0 && (

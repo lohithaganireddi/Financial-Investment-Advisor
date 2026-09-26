@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-26 (Day 34: Agent Failure Handling & Resilience Layer)
+
+### Added
+- **Sanitized Error Handling**: Implemented `_sanitize_error_message()` helper in `agents/orchestrator.py` to scrub API keys, credentials, local OS file paths, and raw Python tracebacks across all agent failure boundaries.
+- **Explicit Failure Trace Boundaries**: Standardized failure logging in `decision_trace` with explicit `result: "failed"` and `result: "blocked"` entries across market agent failure halts, news agent failure blocks, risk agent failure halts, and portfolio agent recommendation errors.
+- **Preserved Partial Context**: Preserved valid market and risk analysis outputs when downstream news or portfolio agents fail or block recommendation generation.
+- **Frontend Resilience**: Updated `frontend/src/components/ResultCard.jsx` to render `RECOMMENDATION: UNAVAILABLE` badge and clear explanatory summaries when recommendations are blocked, preventing misleading defaults.
+- **Resilience Test Suite**: Added comprehensive unit tests in `tests/test_agents.py` bringing total passing test suite from 153 to 158 tests.
+
 ## [1.3.0] - 2026-09-26 (Day 33: Decision Trace UI / Explainability Layer)
 
 ### Added
