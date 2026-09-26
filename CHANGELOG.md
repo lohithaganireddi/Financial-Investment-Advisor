@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-26 (Day 35: Advanced Portfolio Analytics & Risk Breakdown / Interactive Allocation Visualizer)
+
+### Added
+- **Interactive Asset Allocation Visualizer**: Redesigned `frontend/src/pages/Analytics.jsx` with dynamic, multi-colored segmented allocation bar showing exact percentage split across Stock, Crypto, and Financial News.
+- **Interactive Multi-Factor Filter Controls**: Added filter controls for asset type (`Stock`, `Crypto`), recommendation rating (`BUY`, `HOLD`, `AVOID`), risk level (`Low`, `Medium`, `High`), and ticker search.
+- **Score Synthesis Breakdown**: Added active score synthesis widget rendering starting score (+50), Market Direction (+20/-20), Risk Level (+15/-20), and News Sentiment (+15/-15) leading to final calculated recommendation score.
+- **Risk Spectrum & Confidence Metrics**: Added volatility risk score distribution spectrum, recommendation ratio analysis, high-confidence ratio KPI, and interactive analysis data table.
+- **Expanded History Retrieval**: Updated `fetchHistory()` in `FinancialContext.jsx` to retrieve up to 50 historical analysis records for rich analytics aggregation.
+
 ## [1.4.0] - 2026-09-26 (Day 34: Agent Failure Handling & Resilience Layer)
 
 ### Added

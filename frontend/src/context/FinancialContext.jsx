@@ -17,7 +17,7 @@ export function FinancialProvider({ children }) {
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
-      const resp = await fetch('/api/history?limit=20');
+      const resp = await fetch('/api/history?limit=50');
       if (resp.ok) {
         const data = await resp.json();
         if (data.success && Array.isArray(data.analyses)) {

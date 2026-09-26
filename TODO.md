@@ -133,9 +133,21 @@
 
 ---
 
-## Future Phase: Advanced Development Roadmap (Days 35 – 45)
+## Day 35: Advanced Portfolio Analytics & Risk Breakdown / Interactive Allocation Visualizer (Completed ✅)
+- [x] Redesign `frontend/src/pages/Analytics.jsx` with interactive asset allocation visualizer bar (Stock vs Crypto vs News).
+- [x] Build interactive filter controls (Asset type, Recommendation, Risk level, Search query).
+- [x] Add score composition widget visualizing signal adjustments (+20/-20 Market, +15/-20 Risk, +15/-15 News) leading to final score.
+- [x] Integrate volatility risk level distribution spectrum, recommendation ratio analysis, and high-confidence metrics.
+- [x] Expose interactive data table for filtering and inspecting historical portfolio analyses.
+- [x] Update `fetchHistory()` limit to 50 records in `FinancialContext.jsx`.
+- [x] Verify backend pytest test suite (158 passed).
+- [x] Verify frontend production build (`npm run build`).
+
+---
+
+## Future Phase: Advanced Development Roadmap (Days 36 – 45)
 - [ ] LLM & Autonomous Reasoning Integration (OpenAI / Gemini API adapters).
-- [ ] Advanced Portfolio Analytics & Interactive Charting (Recharts / Chart.js).
+- [ ] Advanced Interactive Backtesting & Monte Carlo Simulations.
 - [ ] User Authentication & Multi-User Profiles (JWT / FastAPI Security).
 - [ ] WebSockets for Real-Time Ticker Streaming.
 - [ ] Dockerization & Production Cloud Deployment.
