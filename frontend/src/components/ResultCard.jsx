@@ -1,6 +1,7 @@
 import React from 'react';
 import { Award, ShieldAlert, Newspaper, TrendingUp, Info, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
 import DecisionTrace from './DecisionTrace';
+import LLMReasoningCard from './LLMReasoningCard';
 
 export default function ResultCard({ result }) {
   if (!result) return null;
@@ -184,6 +185,9 @@ export default function ResultCard({ result }) {
 
       {/* Decision Trace & Explainability Section */}
       <DecisionTrace trace={decisionTrace} />
+
+      {/* Autonomous LLM Reasoning Synthesis */}
+      <LLMReasoningCard analysisData={analysisData} />
 
       {/* Summary */}
       <div style={{ background: 'rgba(11, 15, 25, 0.6)', padding: '1.1rem', borderRadius: '10px', borderLeft: `4px solid ${hasRecommendation ? 'var(--accent-blue)' : 'var(--amber-hold)'}`, margin: '1.25rem 0' }}>

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-26 (Day 38: LLM & Autonomous Financial Reasoning Integration Layer)
+
+### Added
+- **LLM Reasoning Adapter Service**: Created `services/llm_service.py` to synthesize natural language executive financial summaries, key investment takeaways, and risk warnings. Supports OpenAI, Gemini, Anthropic, and a zero-dependency deterministic hybrid fallback mode.
+- **LLM Synthesis REST Endpoint**: Implemented `POST /api/llm/synthesize` in `backend/routes.py` with validation schema `LLMSynthesizeRequest` in `backend/schemas.py`.
+- **Autonomous LLM Reasoning UI Component**: Built `frontend/src/components/LLMReasoningCard.jsx` and embedded it into `frontend/src/components/ResultCard.jsx` to display conversational executive summaries, key takeaways, and risk alerts with provider badges.
+- **LLM Service & Endpoint Test Suite**: Added `tests/test_llm.py` bringing total passing backend test suite from 170 to 176 tests.
+
 ## [1.7.0] - 2026-09-26 (Day 37: User Authentication, Profile Security & Saved Watchlist Preferences Engine)
 
 ### Added

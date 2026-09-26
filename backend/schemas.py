@@ -176,3 +176,11 @@ class WatchlistListResponse(BaseModel):
     items: List[WatchlistItemResponse]
 
 
+class LLMSynthesizeRequest(BaseModel):
+    """Request payload schema for POST /api/llm/synthesize."""
+    analysis_data: dict = Field(..., description="Multi-agent analysis result dictionary")
+    provider: Optional[str] = Field(default="auto", description="Target provider: 'auto', 'openai', 'gemini', 'anthropic', 'offline_fallback'")
+    model: Optional[str] = Field(default=None, description="Optional target model identifier")
+
+
+

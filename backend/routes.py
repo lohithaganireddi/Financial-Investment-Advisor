@@ -20,6 +20,7 @@ from backend.schemas import (
     WatchlistCreateRequest,
     WatchlistItemResponse,
     WatchlistListResponse,
+    LLMSynthesizeRequest,
 )
 from agents.orchestrator import Orchestrator
 from services.query_interpreter import QueryInterpreter
@@ -27,6 +28,7 @@ from services.analysis_repository import AnalysisRepository
 from services.backtest_engine import BacktestEngine
 from services.user_repository import UserRepository
 from services.auth_service import AuthService
+from services.llm_service import LLMService
 
 router = APIRouter(prefix="/api", tags=["Analysis"])
 
@@ -36,6 +38,7 @@ _default_interpreter = QueryInterpreter()
 _default_repository = AnalysisRepository()
 _default_backtest_engine = BacktestEngine()
 _default_user_repository = UserRepository()
+_default_llm_service = LLMService()
 
 
 def get_orchestrator() -> Orchestrator:
@@ -61,6 +64,12 @@ def get_backtest_engine() -> BacktestEngine:
 def get_user_repository() -> UserRepository:
     """Dependency provider for UserRepository instance, easily overridable in tests."""
     return _default_user_repository
+
+
+def get_llm_service() -> LLMService:
+    """Dependency provider for LLMService instance, easily overridable in tests."""
+    return _default_llm_service
+
 
 
 
@@ -410,5 +419,31 @@ def remove_from_watchlist(
         "success": True,
         "message": f"Watchlist item #{item_id} removed."
     }
+
+
+@router.post("/llm/synthesize", response_model=Dict[str, Any])
+def synthesize_llm_reasoning(
+    request: LLMSynthesizeRequest,
+    llm_service: LLMService = Depends(get_llm_service)
+) -> Dict[str, Any]:
+    """
+    Synthesize autonomous natural language LLM reasoning from multi-agent analysis outputs.
+
+    :param request: LLMSynthesizeRequest containing analysis_data, provider, and optional model.
+    :param llm_service: Injected LLMService instance.
+    :return: Synthesized reasoning dictionary with executive summary and key takeaways.
+    """
+    result = llm_service.synthesize_reasoning(
+        analysis_data=request.analysis_data,
+        provider=request.provider or "auto",
+        model=request.model
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error", "LLM reasoning synthesis failed.")
+        )
+    return result
+
 
 
