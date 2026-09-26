@@ -100,7 +100,18 @@
 
 ---
 
-## Future Phase: Advanced Development Roadmap (Days 32 – 45)
+## Day 32: Explainability & Decision Trace (Completed ✅)
+- [x] Enhance `AnalysisContext` with `decision_trace` list and `record_trace()` helper method.
+- [x] Integrate structured decision traces into `Orchestrator.run_intent()` covering stock, crypto, news-only, and unsupported workflows.
+- [x] Represent failure paths and blocking decisions (`block_recommendation`, market failure halts, news failure warnings) in the decision trace.
+- [x] Expose `decision_trace` in `AnalysisContext.to_response_dict()` for API observability.
+- [x] Add Day 32 unit test suite in `tests/test_agents.py` bringing total passing tests to 153.
+- [x] Verify frontend build (`npm run build`).
+- [x] Perform live query verification across 6 target prompts.
+
+---
+
+## Future Phase: Advanced Development Roadmap (Days 33 – 45)
 - [ ] LLM & Autonomous Reasoning Integration (OpenAI / Gemini API adapters).
 - [ ] Advanced Portfolio Analytics & Interactive Charting (Recharts / Chart.js).
 - [ ] User Authentication & Multi-User Profiles (JWT / FastAPI Security).

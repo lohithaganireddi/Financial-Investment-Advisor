@@ -75,6 +75,9 @@ class AnalysisContext:
     decision_flags: Dict[str, bool] = field(default_factory=dict)
     confidence_factors: List[str] = field(default_factory=list)
 
+    # --- Structured Decision Trace (Day 32) --------------------------------
+    decision_trace: List[Dict[str, Any]] = field(default_factory=list)
+
     # -----------------------------------------------------------------------
     # Status helpers
     # -----------------------------------------------------------------------
@@ -176,6 +179,35 @@ class AnalysisContext:
         """Append a plain-text rationale string to the decisions log."""
         self.decisions.append(rationale)
 
+    def record_trace(
+        self,
+        agent: str,
+        action: str,
+        reason: str,
+        result: Optional[str] = None,
+        next_decision: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Record a structured decision trace entry into decision_trace.
+
+        :param agent:         Name of the agent or orchestrator module.
+        :param action:        Specific action name (e.g. 'analyze_market', 'evaluate_risk').
+        :param reason:        Why the decision or action was taken.
+        :param result:        Outcome/signal (e.g. 'bullish', 'low', 'BUY', 'failed', 'blocked').
+        :param next_decision: What decision step follows next.
+        """
+        entry: Dict[str, Any] = {
+            "step": len(self.decision_trace) + 1,
+            "agent": agent,
+            "action": action,
+            "reason": reason,
+            "result": result,
+            "next_decision": next_decision,
+        }
+        self.decision_trace.append(entry)
+        self.log_decision(f"[{agent}:{action}] {reason} -> result='{result}', next='{next_decision}'")
+        return entry
+
     # -----------------------------------------------------------------------
     # Response serialisation
     # -----------------------------------------------------------------------
@@ -197,6 +229,7 @@ class AnalysisContext:
             "asset_type": self.asset_type,
             "agents_used": list(self.agents_used),
             "agent_activity": list(self.agent_activity),
+            "decision_trace": list(self.decision_trace),
             "market_data": self.market_data,
             "news_data": self.news_data,
             "risk_data": self.risk_data,

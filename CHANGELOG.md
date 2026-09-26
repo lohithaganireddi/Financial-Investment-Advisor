@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-26 (Day 32: Explainability & Decision Trace)
+
+### Added
+- **Structured Decision Trace**: Added `decision_trace` list and `record_trace()` method to `AnalysisContext`. Each trace entry records `step`, `agent`, `action`, `reason`, `result`, and `next_decision`.
+- **Orchestrator Observability**: Updated `Orchestrator.run_intent()` to generate step-by-step decision trace entries across intent classification (`classify_intent`), market analysis (`analyze_market`), news evaluation (`analyze_news`), risk assessment (`evaluate_risk`), and recommendation synthesis (`generate_recommendation`).
+- **Failure-Path & Blocking Observability**: Trace explicitly represents failure paths and blocking decisions (`block_recommendation` when required news or risk context is missing/failed, `analyze_market` failure halting downstream execution, `classify_intent` halting unsupported prompts).
+- **API Observability**: Exposed `decision_trace` in `AnalysisContext.to_response_dict()` while preserving all existing V1.0/Day 31 API keys (`agents_used`, `agent_activity`, `decision_flags`, `recommendation`).
+- **Focused Test Suite**: Added Day 32 unit tests in `tests/test_agents.py` bringing total passing test suite from 146 to 153 tests.
+
 ## [1.1.0] - 2026-09-26 (Day 31: Stronger Agentic AI Intelligence)
 
 ### Added

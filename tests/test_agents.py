@@ -2317,3 +2317,183 @@ def test_day31_crypto_analysis_workflow():
     mock_crypto.analyze_crypto.assert_called_once_with("bitcoin")
 
 
+# ==========================================
+# Day 32 — Explainability & Decision Trace Tests
+# ==========================================
+
+def test_day32_stock_analysis_produces_decision_trace():
+    """Verify stock analysis generates a structured decision trace with 5 steps (including intent classification)."""
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(100, "buy", "high"),
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+    assert res["success"] is True
+    assert "decision_trace" in res
+    trace = res["decision_trace"]
+    assert len(trace) == 5
+    assert trace[0]["agent"] == "Orchestrator"
+    assert trace[0]["action"] == "classify_intent"
+    assert trace[0]["result"] == "STOCK_ANALYSIS"
+    assert trace[0]["next_decision"] == "Route to StockAgent"
+
+    assert trace[1]["agent"] == "StockAgent"
+    assert trace[1]["action"] == "analyze_market"
+    assert trace[1]["result"] == "bullish"
+    assert trace[1]["next_decision"] == "Proceed to NewsAgent"
+
+    assert trace[2]["agent"] == "NewsAgent"
+    assert trace[2]["action"] == "analyze_news"
+    assert trace[2]["result"] == "positive"
+    assert trace[2]["next_decision"] == "Proceed to RiskAgent"
+
+    assert trace[3]["agent"] == "RiskAgent"
+    assert trace[3]["action"] == "evaluate_risk"
+    assert trace[3]["result"] == "low"
+    assert trace[3]["next_decision"] == "Proceed to PortfolioAgent"
+
+    assert trace[4]["agent"] == "PortfolioAgent"
+    assert trace[4]["action"] == "generate_recommendation"
+    assert trace[4]["result"] == "BUY"
+    assert trace[4]["next_decision"] == "Complete analysis"
+
+
+def test_day32_crypto_analysis_produces_decision_trace():
+    """Verify crypto analysis generates a structured decision trace starting with Orchestrator and CryptoAgent."""
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        crypto_result=_make_crypto_market_data("bullish"),
+        news_result=_make_news_data("positive"),
+        risk_result=_make_risk_data("medium"),
+        portfolio_result=_make_recommendation(85, "buy", "medium"),
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "CRYPTO_ANALYSIS",
+        "asset_type": "crypto", "asset": "bitcoin", "news_query": "Bitcoin",
+    })
+    assert res["success"] is True
+    assert "decision_trace" in res
+    trace = res["decision_trace"]
+    assert len(trace) == 5
+    assert trace[0]["agent"] == "Orchestrator"
+    assert trace[0]["action"] == "classify_intent"
+    assert trace[0]["result"] == "CRYPTO_ANALYSIS"
+    assert trace[0]["next_decision"] == "Route to CryptoAgent"
+    assert trace[1]["agent"] == "CryptoAgent"
+    assert trace[1]["action"] == "analyze_market"
+
+
+def test_day32_general_news_query_decision_trace():
+    """General news query produces intent classification + NewsAgent decision trace entries."""
+    orch, _, _, _, _, _ = _make_orchestrator_for_intent(
+        news_result=_make_news_data("neutral")
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "GENERAL_FINANCIAL_NEWS", "news_query": "economy"
+    })
+    assert res["success"] is True
+    assert "decision_trace" in res
+    trace = res["decision_trace"]
+    assert len(trace) == 2
+    assert trace[0]["agent"] == "Orchestrator"
+    assert trace[0]["action"] == "classify_intent"
+    assert trace[0]["result"] == "GENERAL_FINANCIAL_NEWS"
+    assert trace[0]["next_decision"] == "Route to NewsAgent"
+    assert trace[1]["agent"] == "NewsAgent"
+    assert trace[1]["action"] == "analyze_news"
+    assert trace[1]["next_decision"] == "Complete news summary analysis"
+
+
+def test_day32_unsupported_query_decision_trace():
+    """Unsupported query produces an Orchestrator classification trace entry and 0 agent calls."""
+    orch = Orchestrator()
+    res = orch.run_intent({
+        "success": False, "intent": "UNSUPPORTED", "error": "Unknown query"
+    })
+    assert res["success"] is False
+    assert res["agents_used"] == []
+    assert "decision_trace" in res
+    trace = res["decision_trace"]
+    assert len(trace) == 1
+    assert trace[0]["agent"] == "Orchestrator"
+    assert trace[0]["action"] == "classify_intent"
+    assert trace[0]["result"] == "unsupported"
+    assert trace[0]["next_decision"] == "Halt execution without invoking financial agents"
+
+
+def test_day32_portfolio_agent_blocking_trace_when_news_fails():
+    """When news fails, decision trace records NewsAgent failure and PortfolioAgent block_recommendation."""
+    orch, _, _, _, _, mock_portfolio = _make_orchestrator_for_intent(
+        stock_result=_make_stock_market_data("bullish"),
+        news_result={"success": False, "agent": "NewsAgent", "error": "Rate limit"},
+        risk_result=_make_risk_data("low"),
+        portfolio_result=_make_recommendation(),
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "AAPL", "news_query": "Apple",
+    })
+    assert res["success"] is True
+    trace = res["decision_trace"]
+    assert len(trace) == 5
+    assert trace[0]["agent"] == "Orchestrator"
+    # Step 2: StockAgent succeeded
+    assert trace[1]["agent"] == "StockAgent"
+    # Step 3: NewsAgent failed
+    assert trace[2]["agent"] == "NewsAgent"
+    assert trace[2]["result"] == "failed"
+    # Step 4: RiskAgent succeeded
+    assert trace[3]["agent"] == "RiskAgent"
+    # Step 5: PortfolioAgent blocked
+    assert trace[4]["agent"] == "PortfolioAgent"
+    assert trace[4]["action"] == "block_recommendation"
+    assert trace[4]["result"] == "blocked"
+    assert trace[4]["next_decision"] == "Block recommendation"
+    mock_portfolio.generate_recommendation.assert_not_called()
+
+
+def test_day32_market_failure_trace_representation():
+    """When market agent fails, decision trace records intent classification then market failure and halting next_decision."""
+    orch, _, _, mock_news, mock_risk, _ = _make_orchestrator_for_intent(
+        stock_result={"success": False, "agent": "StockAgent", "error": "Symbol not found"},
+    )
+    res = orch.run_intent({
+        "success": True, "intent": "STOCK_ANALYSIS",
+        "asset_type": "stock", "asset": "INVALID", "news_query": "INVALID",
+    })
+    assert res["success"] is False
+    trace = res["decision_trace"]
+    assert len(trace) == 2
+    assert trace[0]["agent"] == "Orchestrator"
+    assert trace[0]["action"] == "classify_intent"
+    assert trace[1]["agent"] == "StockAgent"
+    assert trace[1]["action"] == "analyze_market"
+    assert trace[1]["result"] == "failed"
+    assert "Stop analysis" in trace[1]["next_decision"]
+    mock_news.analyze_news.assert_not_called()
+    mock_risk.analyze_risk.assert_not_called()
+
+
+def test_day32_existing_day31_decision_flags_retained():
+    """Verify Day 31 decision flags remain present in AnalysisContext alongside decision_trace."""
+    ctx = AnalysisContext(intent="STOCK_ANALYSIS", asset_type="stock", asset="AAPL")
+    ctx.market_data = _make_stock_market_data("bullish")
+    ctx.news_data = _make_news_data("positive")
+    ctx.risk_data = _make_risk_data("low")
+
+    flags = ctx.update_decision_flags()
+    assert flags.get("market_bullish") is True
+    assert flags.get("news_positive") is True
+    assert flags.get("low_risk") is True
+    assert flags.get("recommendation_allowed") is True
+
+    ctx.record_trace("StockAgent", "analyze_market", "Intent STOCK_ANALYSIS", "bullish", "Proceed to NewsAgent")
+    assert len(ctx.decision_trace) == 1
+    assert ctx.decision_trace[0]["step"] == 1
+
+
+
