@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Download, FileText, Printer, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { authenticatedFetch } from '../services/apiClient';
 
 export default function ExportReportModal({ isOpen, onClose, analysis }) {
   const [downloading, setDownloading] = useState(false);
@@ -15,9 +16,7 @@ export default function ExportReportModal({ isOpen, onClose, analysis }) {
     setStatusMessage(null);
     try {
       if (analysisId) {
-        const token = localStorage.getItem('token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`/api/export/${analysisId}?format=json`, { headers });
+        const res = await authenticatedFetch(`/api/export/${analysisId}?format=json`);
         if (!res.ok) throw new Error('Failed to fetch JSON export');
         const data = await res.json();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -55,9 +54,7 @@ export default function ExportReportModal({ isOpen, onClose, analysis }) {
     setStatusMessage(null);
     try {
       if (analysisId) {
-        const token = localStorage.getItem('token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await fetch(`/api/export/${analysisId}?format=html`, { headers });
+        const res = await authenticatedFetch(`/api/export/${analysisId}?format=html`);
         if (!res.ok) throw new Error('Failed to fetch HTML export');
         const htmlText = await res.text();
 

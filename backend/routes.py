@@ -5,11 +5,53 @@ Defines backend routes for asset analysis, query interpretation, history persist
 and orchestrator interaction.
 """
 
+import os
 import time
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 import json
 from datetime import datetime, timezone
+from services.rate_limiter import limiter
+
+REFRESH_COOKIE_NAME = "sf_refresh_token"
+REFRESH_COOKIE_PATH = "/api/auth"
+REFRESH_COOKIE_MAX_AGE = 7 * 86400  # 7 days (604,800 seconds)
+
+
+def _is_cookie_secure() -> bool:
+    """Check if cookie should require Secure flag (HTTPS)."""
+    env = os.getenv("ENV", "development").lower()
+    cookie_secure_env = os.getenv("COOKIE_SECURE", "false").lower()
+    return env == "production" or cookie_secure_env == "true"
+
+
+def set_refresh_cookie(response: Response, raw_token: str):
+    """Set secure HttpOnly refresh token cookie on response object."""
+    if not response or not raw_token:
+        return
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=raw_token,
+        max_age=REFRESH_COOKIE_MAX_AGE,
+        expires=REFRESH_COOKIE_MAX_AGE,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        samesite="lax",
+        secure=_is_cookie_secure()
+    )
+
+
+def clear_refresh_cookie(response: Response):
+    """Clear refresh token cookie on response object."""
+    if not response:
+        return
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        samesite="lax",
+        secure=_is_cookie_secure()
+    )
 from backend.schemas import (
     AnalyzeRequest,
     QueryRequest,
@@ -20,6 +62,8 @@ from backend.schemas import (
     LoginRequest,
     TokenResponse,
     UserResponse,
+    RefreshRequest,
+    RefreshResponse,
     WatchlistCreateRequest,
     WatchlistItemResponse,
     WatchlistListResponse,
@@ -109,16 +153,22 @@ def get_optional_current_user(
     user_repo: UserRepository = Depends(get_user_repository)
 ) -> Optional[User]:
     """Dependency helper to extract user from Authorization Bearer JWT token if present, returning None if unauthenticated."""
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1]
-        payload = AuthService.decode_access_token(token)
-        if payload and "sub" in payload:
-            try:
-                user_id = int(payload["sub"])
-                return user_repo.get_user_by_id(user_id)
-            except (ValueError, TypeError):
-                return None
-    return None
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        return None
+
+    payload = AuthService.decode_access_token(token)
+    if not payload or "sub" not in payload:
+        return None
+
+    try:
+        user_id = int(payload["sub"])
+        return user_repo.get_user_by_id(user_id)
+    except (ValueError, TypeError):
+        return None
 
 
 @router.post("/analyze", response_model=Dict[str, Any])
@@ -357,34 +407,62 @@ def get_current_user_from_token(
     authorization: Optional[str] = Header(None),
     user_repo: UserRepository = Depends(get_user_repository)
 ):
-    """Dependency helper to extract user from Authorization Bearer JWT token."""
-    user_id = 1
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1]
-        payload = AuthService.decode_access_token(token)
-        if payload and "sub" in payload:
-            user_id = int(payload["sub"])
+    """
+    Dependency helper to extract user from Authorization Bearer JWT token.
+    Raises HTTP 401 Unauthorized if token is missing, malformed, invalid, expired, or user not found.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = AuthService.decode_access_token(token)
+    if not payload or "sub" not in payload:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        user_id = int(payload["sub"])
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     user = user_repo.get_user_by_id(user_id)
     if user is None:
-        # Fallback to creating a default local analyst user if missing
-        user = user_repo.create_user(
-            username=f"analyst_{user_id}",
-            email=f"analyst_{user_id}@smartfinance.local",
-            password="default_analyst_password",
-            role="analyst"
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        if user is None:
-            user = user_repo.get_user_by_username(f"analyst_{user_id}")
     return user
 
 
 @router.post("/auth/register", response_model=Dict[str, Any])
 def register_user(
+    raw_request: Request,
     request: RegisterRequest,
+    response: Response,
     user_repo: UserRepository = Depends(get_user_repository)
 ) -> Dict[str, Any]:
-    """Register a new user account."""
+    """Register a new user account and set HttpOnly refresh token cookie."""
+    limiter.check(raw_request, "auth:register")
+
     existing_user = user_repo.get_user_by_username(request.username)
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered.")
@@ -398,6 +476,10 @@ def register_user(
         raise HTTPException(status_code=400, detail="Failed to create user account.")
 
     token = AuthService.create_access_token({"sub": str(user.id), "username": user.username})
+    refresh_res = user_repo.create_refresh_token(user_id=user.id)
+    if isinstance(refresh_res, tuple) and refresh_res[0]:
+        set_refresh_cookie(response, refresh_res[0])
+
     return {
         "success": True,
         "access_token": token,
@@ -414,15 +496,29 @@ def register_user(
 
 @router.post("/auth/login", response_model=Dict[str, Any])
 def login_user(
+    raw_request: Request,
     request: LoginRequest,
+    response: Response,
     user_repo: UserRepository = Depends(get_user_repository)
 ) -> Dict[str, Any]:
-    """Authenticate user credentials and return JWT access token."""
+    """Authenticate user credentials and set HttpOnly refresh token cookie."""
+    limiter.check(raw_request, "auth:login")
+
     user = user_repo.get_user_by_username(request.username)
     if not user or not AuthService.verify_password(request.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid username or password.")
 
+    # Transparently upgrade legacy PBKDF2 (or outdated) password hash to Argon2id
+    if AuthService.needs_rehash(user.hashed_password):
+        new_hash = AuthService.hash_password(request.password)
+        user_repo.update_user_password(user.id, new_hash)
+        user.hashed_password = new_hash
+
     token = AuthService.create_access_token({"sub": str(user.id), "username": user.username})
+    refresh_res = user_repo.create_refresh_token(user_id=user.id)
+    if isinstance(refresh_res, tuple) and refresh_res[0]:
+        set_refresh_cookie(response, refresh_res[0])
+
     return {
         "success": True,
         "access_token": token,
@@ -434,6 +530,57 @@ def login_user(
             "role": user.role,
             "created_at": user.created_at
         }
+    }
+
+
+@router.post("/auth/refresh", response_model=Dict[str, Any])
+def refresh_access_token(
+    raw_request: Request,
+    response: Response,
+    sf_refresh_token: Optional[str] = Cookie(None, alias="sf_refresh_token"),
+    request: Optional[RefreshRequest] = None,
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Dict[str, Any]:
+    """
+    Refresh authentication session using secure HttpOnly refresh cookie.
+    Executes single-use refresh token rotation, updates HttpOnly cookie, and returns a new 15-minute access token.
+    """
+    limiter.check(raw_request, "auth:refresh")
+
+    raw_token = sf_refresh_token or (request.refresh_token if (request and request.refresh_token) else None)
+
+    if not raw_token or not str(raw_token).strip():
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    new_raw_token, new_record, err = user_repo.rotate_refresh_token(str(raw_token).strip())
+    if err or not new_record:
+        clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=401,
+            detail=err or "Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = user_repo.get_user_by_id(new_record.user_id)
+    if user is None:
+        clear_refresh_cookie(response)
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    set_refresh_cookie(response, new_raw_token)
+    new_access_token = AuthService.create_access_token({"sub": str(user.id), "username": user.username})
+
+    return {
+        "success": True,
+        "access_token": new_access_token,
+        "token_type": "bearer"
     }
 
 
@@ -452,6 +599,43 @@ def get_current_user_profile(
             "created_at": current_user.created_at
         }
     }
+
+
+@router.post("/auth/logout", response_model=Dict[str, Any])
+def logout_user(
+    response: Response,
+    current_user=Depends(get_current_user_from_token),
+    sf_refresh_token: Optional[str] = Cookie(None, alias="sf_refresh_token"),
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Dict[str, Any]:
+    """
+    Revoke current user refresh token session server-side and clear HttpOnly refresh cookie.
+    Requires valid authenticated access token. Idempotent and safe.
+    """
+    clear_refresh_cookie(response)
+
+    if sf_refresh_token and str(sf_refresh_token).strip():
+        token_hash = AuthService.hash_refresh_token(str(sf_refresh_token).strip())
+        record = user_repo.get_refresh_token_by_hash(token_hash)
+        if record and record.user_id == current_user.id:
+            user_repo.revoke_refresh_token(token_hash)
+
+    return {"message": "Logged out successfully"}
+
+
+@router.post("/auth/logout-all", response_model=Dict[str, Any])
+def logout_all_user_sessions(
+    response: Response,
+    current_user=Depends(get_current_user_from_token),
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> Dict[str, Any]:
+    """
+    Revoke ALL active refresh token sessions belonging to the current user and clear HttpOnly refresh cookie.
+    Requires valid authenticated access token. Idempotent and safe.
+    """
+    clear_refresh_cookie(response)
+    user_repo.revoke_all_user_refresh_tokens(user_id=current_user.id)
+    return {"message": "All sessions logged out successfully"}
 
 
 @router.get("/watchlist", response_model=Dict[str, Any])
@@ -590,6 +774,8 @@ def export_analysis_report(
     if record.user_id is not None:
         if current_user and current_user.id != record.user_id:
             raise HTTPException(status_code=403, detail="Forbidden: You do not have permission to export this report.")
+        elif not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required to access user-bound report.")
 
     analysis_dict = {
         "id": record.id,

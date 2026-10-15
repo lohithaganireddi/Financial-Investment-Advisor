@@ -193,6 +193,40 @@ npm run build
 
 ---
 
+## 🔍 Example Queries & System Outputs
+
+| Query Scenario | Natural Language Query | Agents Executed | Output Recommendation | Decision Trace Behavior |
+| :--- | :--- | :--- | :---: | :--- |
+| **Stock Analysis** | `"Analyze Apple stock $AAPL"` | `StockAgent` → `NewsAgent` → `RiskAgent` → `PortfolioAgent` | **`BUY`** | Full 5-step pipeline execution; calculates composite risk score (25) and generates `BUY` with high confidence. |
+| **Crypto Analysis** | `"How is Bitcoin performing?"` | `CryptoAgent` → `NewsAgent` → `RiskAgent` → `PortfolioAgent` | **`AVOID`** | 24h market trend evaluation; applies crypto risk premium (+10) and flags high volatility. |
+| **Financial News** | `"What is the latest stock market news?"` | `NewsAgent` | *N/A (News Only)* | Routes strictly to `NewsAgent`; bypasses database persistence and portfolio recommendation. |
+| **Unsupported Query** | `"Tell me a funny joke"` | *None* | **`UNSUPPORTED`** | Halts execution immediately at Query Interpreter stage without calling market APIs. |
+| **News API Failure** | `"Analyze Tesla"` (News API Offline) | `StockAgent` → `NewsAgent` → `RiskAgent` | **`UNAVAILABLE`** | Preserves valid market & risk scores; blocks `PortfolioAgent` to prevent ungrounded recommendations. |
+
+---
+
+## 🛡️ Security, Sanitization & Error Handling
+
+- **Credential & Secret Protection**: All external API keys (`ALPHA_VANTAGE_API_KEY`, `NEWS_DATA_API_KEY`) and JWT secrets (`SECRET_KEY`) are managed exclusively via environment variables (`.env`). User-facing error messages sanitize system tracebacks, internal file paths, and authorization headers.
+- **Route Protection Guards**: `ProtectedRoute` verifies JWT token authenticity before granting access to dashboard routes (`/stocks`, `/crypto`, `/news`, `/risk`, `/portfolio`, `/agents`, `/analytics`, `/history`, `/settings`). Unauthenticated requests automatically redirect to `/login`.
+- **User Data Isolation**: User analysis records and watchlists are strictly bound by `user_id`. Report exports check account ownership, returning `403 Forbidden` for unauthorized export requests.
+
+---
+
+## 💡 System Limitations & Future Improvements
+
+### Current Limitations
+- **Educational Scope**: Software recommendations are computed deterministically via rule-based algorithms and do not execute live broker transactions.
+- **API Rate Limits**: Third-party free-tier APIs (Alpha Vantage, CoinGecko, NewsData) enforce request rate limits.
+
+### Future Improvements
+- 🔗 **Direct Brokerage Integration**: Connect Alpaca or Interactive Brokers APIs for automated paper trading execution.
+- 🌍 **Multi-Currency Support**: Expand price quotes and portfolio valuation beyond USD to EUR, GBP, and JPY.
+- 📊 **Custom Macroeconomic Risk Models**: Incorporate Federal Reserve interest rate benchmarks and inflation metrics into `RiskAgent` scoring.
+
+---
+
 ## ⚠️ Financial Disclaimer
 
 **SmartFinancial Advisor (FinSight 2.0)** is an educational software project for algorithmic data synthesis and personal finance research. All recommendations, scores, and analysis summaries are generated automatically by software logic and **do not constitute professional financial advice**. Always consult a certified financial advisor before making real-world investment decisions.
+

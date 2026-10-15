@@ -148,6 +148,18 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
+class RefreshRequest(BaseModel):
+    """Request payload schema for token refresh (optional for backward compatibility/testing)."""
+    refresh_token: Optional[str] = Field(default=None, description="Optional raw refresh token string")
+
+
+class RefreshResponse(BaseModel):
+    """Response payload schema for successful token refresh."""
+    success: bool = True
+    access_token: str
+    token_type: str = "bearer"
+
+
 class WatchlistCreateRequest(BaseModel):
     """Request payload schema for adding asset to user watchlist."""
     asset_type: str = Field(..., description="Asset type: 'stock' or 'crypto'")

@@ -66,6 +66,18 @@ def init_db():
                     r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
                 ]:
                     conn.execute(text("ALTER TABLE analyses ADD COLUMN user_id INTEGER REFERENCES users(id)"))
+
+                # Migrations for refresh_tokens table
+                res_rf = conn.execute(text("PRAGMA table_info(refresh_tokens)"))
+                rf_cols = {row[1] for row in res_rf.fetchall()}
+                if "family_id" not in rf_cols and "refresh_tokens" in [
+                    r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+                ]:
+                    conn.execute(text("ALTER TABLE refresh_tokens ADD COLUMN family_id VARCHAR"))
+                if "replaced_by_id" not in rf_cols and "refresh_tokens" in [
+                    r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+                ]:
+                    conn.execute(text("ALTER TABLE refresh_tokens ADD COLUMN replaced_by_id INTEGER"))
                 conn.commit()
         except Exception as exc:
             print(f"init_db migration notice: {exc}")

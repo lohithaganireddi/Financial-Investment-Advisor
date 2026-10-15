@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { authenticatedFetch } from '../services/apiClient';
 import {
   MessageSquare,
   Send,
@@ -56,7 +57,7 @@ export default function LLMChatAssistant({ analysisData }) {
     setLoading(true);
 
     try {
-      const resp = await fetch('/api/llm/chat', {
+      const resp = await authenticatedFetch('/api/llm/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

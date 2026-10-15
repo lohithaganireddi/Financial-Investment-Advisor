@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFinancial } from '../context/FinancialContext';
+import { authenticatedFetch } from '../services/apiClient';
 
 export default function WatchlistWidget() {
   const { token, user } = useAuth();
@@ -51,9 +52,7 @@ export default function WatchlistWidget() {
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch('/api/watchlist', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const resp = await authenticatedFetch('/api/watchlist');
       if (resp.ok) {
         const data = await resp.json();
         if (data.success && Array.isArray(data.items)) {

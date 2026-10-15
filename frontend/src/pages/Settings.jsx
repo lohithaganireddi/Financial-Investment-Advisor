@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { authenticatedFetch } from '../services/apiClient';
 import {
   Settings as SettingsIcon,
   Database,
@@ -13,7 +14,7 @@ import {
 } from 'lucide-react';
 
 export default function Settings() {
-  const { user: currentUser, token, logout } = useAuth();
+  const { user: currentUser, token, logout, logoutAll } = useAuth();
 
   // Watchlist State
   const [watchlist, setWatchlist] = useState([]);
@@ -28,9 +29,7 @@ export default function Settings() {
 
   const fetchWatchlist = async () => {
     try {
-      const resp = await fetch('/api/watchlist', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const resp = await authenticatedFetch('/api/watchlist');
       if (resp.ok) {
         const data = await resp.json();
         if (data.success && Array.isArray(data.items)) {
@@ -47,11 +46,10 @@ export default function Settings() {
     if (!newAsset.trim()) return;
 
     try {
-      const resp = await fetch('/api/watchlist', {
+      const resp = await authenticatedFetch('/api/watchlist', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           asset_type: newAssetType,
@@ -74,9 +72,8 @@ export default function Settings() {
 
   const handleRemoveWatchlist = async (itemId) => {
     try {
-      const resp = await fetch(`/api/watchlist/${itemId}`, {
+      const resp = await authenticatedFetch(`/api/watchlist/${itemId}`, {
         method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (resp.ok) {
         fetchWatchlist();
@@ -136,13 +133,23 @@ export default function Settings() {
                 </div>
               </div>
 
-              <button
-                onClick={logout}
-                className="tab-btn"
-                style={{ color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0.5rem 1rem', cursor: 'pointer' }}
-              >
-                <LogOut size={14} /> Log Out Active Session
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  onClick={logout}
+                  className="tab-btn"
+                  style={{ color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0.5rem 1rem', cursor: 'pointer' }}
+                >
+                  <LogOut size={14} /> Log Out Active Session
+                </button>
+                <button
+                  onClick={logoutAll}
+                  className="tab-btn"
+                  style={{ color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0.5rem 1rem', cursor: 'pointer' }}
+                  title="Revoke all active sessions across all devices"
+                >
+                  <LogOut size={14} /> Log Out All Sessions / Devices
+                </button>
+              </div>
             </div>
           ) : (
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No active user session detected.</p>

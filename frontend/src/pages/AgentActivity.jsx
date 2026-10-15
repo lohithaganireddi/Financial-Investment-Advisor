@@ -3,6 +3,8 @@ import { Bot, Activity, Cpu, Gauge, Clock, ShieldCheck, RefreshCw, BarChart2 } f
 import { useFinancial } from '../context/FinancialContext';
 import AgentDashboard from '../components/AgentDashboard';
 
+import { authenticatedFetch } from '../services/apiClient';
+
 export default function AgentActivity() {
   const { agentActivity, decisionTrace, analysisContext } = useFinancial();
   const [telemetry, setTelemetry] = useState(null);
@@ -11,7 +13,7 @@ export default function AgentActivity() {
   const fetchTelemetry = async () => {
     setLoadingTelemetry(true);
     try {
-      const res = await fetch('/api/telemetry/metrics');
+      const res = await authenticatedFetch('/api/telemetry/metrics');
       if (res.ok) {
         const data = await res.json();
         setTelemetry(data);

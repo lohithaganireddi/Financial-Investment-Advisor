@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedFetch } from '../services/apiClient';
 import {
   TrendingUp,
   ShieldAlert,
@@ -39,7 +40,7 @@ export default function BacktestVisualizer({ initialAsset = 'AAPL', initialAsset
     setError(null);
 
     try {
-      const resp = await fetch('/api/backtest', {
+      const resp = await authenticatedFetch('/api/backtest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

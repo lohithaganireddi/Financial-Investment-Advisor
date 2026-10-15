@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { refreshAccessToken, authenticatedFetch } from '../services/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -11,10 +12,35 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     restoreSession();
-  }, [token]);
+  }, []);
+
+  useEffect(() => {
+    const handleExpired = () => {
+      clearSession();
+    };
+    window.addEventListener('sf_session_expired', handleExpired);
+    return () => window.removeEventListener('sf_session_expired', handleExpired);
+  }, []);
 
   const restoreSession = async () => {
-    if (!token) {
+    let activeToken = token || localStorage.getItem(TOKEN_KEY) || '';
+
+    // Case C: Access token missing in localStorage -> attempt silent refresh using HttpOnly cookie
+    if (!activeToken) {
+      try {
+        const refreshedToken = await refreshAccessToken();
+        if (refreshedToken) {
+          activeToken = refreshedToken;
+          setToken(refreshedToken);
+        }
+      } catch (e) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!activeToken) {
       setUser(null);
       setLoading(false);
       return;
@@ -22,7 +48,8 @@ export function AuthProvider({ children }) {
 
     try {
       const resp = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${activeToken}` },
+        credentials: 'include',
       });
 
       if (resp.ok) {
@@ -32,6 +59,28 @@ export function AuthProvider({ children }) {
         } else {
           clearSession();
         }
+      } else if (resp.status === 401) {
+        // Case B: Access token expired -> attempt automatic token refresh
+        try {
+          const newToken = await refreshAccessToken();
+          if (newToken) {
+            setToken(newToken);
+            const retryResp = await fetch('/api/auth/me', {
+              headers: { Authorization: `Bearer ${newToken}` },
+              credentials: 'include',
+            });
+            if (retryResp.ok) {
+              const retryData = await retryResp.json();
+              if (retryData.success && retryData.user) {
+                setUser(retryData.user);
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          // Case D: Refresh failed
+        }
+        clearSession();
       } else {
         clearSession();
       }
@@ -54,6 +103,7 @@ export function AuthProvider({ children }) {
       const resp = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ username, password }),
       });
 
@@ -76,6 +126,7 @@ export function AuthProvider({ children }) {
       const resp = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ username, email, password }),
       });
 
@@ -93,8 +144,30 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
-    clearSession();
+  const logout = async () => {
+    try {
+      const activeToken = token || localStorage.getItem(TOKEN_KEY) || '';
+      if (activeToken) {
+        await authenticatedFetch('/api/auth/logout', { method: 'POST' });
+      }
+    } catch (err) {
+      console.warn('Server logout request failed:', err);
+    } finally {
+      clearSession();
+    }
+  };
+
+  const logoutAll = async () => {
+    try {
+      const activeToken = token || localStorage.getItem(TOKEN_KEY) || '';
+      if (activeToken) {
+        await authenticatedFetch('/api/auth/logout-all', { method: 'POST' });
+      }
+    } catch (err) {
+      console.warn('Server logout-all request failed:', err);
+    } finally {
+      clearSession();
+    }
   };
 
   return (
@@ -107,6 +180,7 @@ export function AuthProvider({ children }) {
         login,
         register,
         logout,
+        logoutAll,
         restoreSession,
       }}
     >

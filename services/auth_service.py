@@ -13,6 +13,8 @@ import os
 import secrets
 import time
 from typing import Any, Dict, Optional
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, InvalidHashError
 
 
 class AuthService:
@@ -23,36 +25,24 @@ class AuthService:
     _SECRET_KEY = os.getenv("JWT_SECRET_KEY", "smartfinancial_advisor_secure_jwt_secret_key_2026")
     _ALGORITHM = "HS256"
     _ITERATIONS = 100000
+    _ph = PasswordHasher()
 
     @classmethod
     def hash_password(cls, password: str) -> str:
         """
-        Hash a plaintext password using PBKDF2-HMAC-SHA256 with a 16-byte random salt.
+        Hash a plaintext password using Argon2id with secure memory-hard parameters.
 
         :param password: Plaintext password string.
-        :return: Formatted string 'salt$hash_hex'.
+        :return: Encoded Argon2id hash string starting with '$argon2id$'.
         """
         if not password or not isinstance(password, str):
             raise ValueError("Password must be a non-empty string.")
 
-        salt = secrets.token_hex(16)
-        key = hashlib.pbkdf2_hmac(
-            "sha256",
-            password.encode("utf-8"),
-            salt.encode("utf-8"),
-            cls._ITERATIONS,
-        )
-        return f"{salt}${key.hex()}"
+        return cls._ph.hash(password)
 
     @classmethod
-    def verify_password(cls, plain_password: str, hashed_password: str) -> bool:
-        """
-        Verify a plaintext password against a stored 'salt$hash_hex' string.
-
-        :param plain_password: Candidate plaintext password.
-        :param hashed_password: Stored hashed password string.
-        :return: True if match, False otherwise.
-        """
+    def _verify_pbkdf2(cls, plain_password: str, hashed_password: str) -> bool:
+        """Helper to verify legacy PBKDF2-HMAC-SHA256 password hashes."""
         if not plain_password or not hashed_password or "$" not in hashed_password:
             return False
 
@@ -69,6 +59,46 @@ class AuthService:
             return False
 
     @classmethod
+    def verify_password(cls, plain_password: str, hashed_password: str) -> bool:
+        """
+        Verify a plaintext password against a stored hash string.
+        Supports both modern Argon2id hashes and legacy PBKDF2 hashes.
+
+        :param plain_password: Candidate plaintext password.
+        :param hashed_password: Stored hashed password string.
+        :return: True if match, False otherwise.
+        """
+        if not plain_password or not hashed_password:
+            return False
+
+        if hashed_password.startswith("$argon2"):
+            try:
+                return cls._ph.verify(hashed_password, plain_password)
+            except (VerifyMismatchError, InvalidHashError, Exception):
+                return False
+
+        return cls._verify_pbkdf2(plain_password, hashed_password)
+
+    @classmethod
+    def needs_rehash(cls, hashed_password: str) -> bool:
+        """
+        Check if a stored password hash needs to be upgraded/re-hashed to Argon2id.
+
+        :param hashed_password: Stored hashed password string.
+        :return: True if legacy hash or outdated parameters, False otherwise.
+        """
+        if not hashed_password or not isinstance(hashed_password, str):
+            return False
+
+        if not hashed_password.startswith("$argon2"):
+            return True
+
+        try:
+            return cls._ph.check_needs_rehash(hashed_password)
+        except Exception:
+            return True
+
+    @classmethod
     def _b64encode(cls, data: bytes) -> str:
         """Helper to encode bytes into unpadded base64url string."""
         return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
@@ -79,13 +109,39 @@ class AuthService:
         padding = "=" * (4 - (len(s) % 4))
         return base64.urlsafe_b64decode((s + padding).encode("utf-8"))
 
+    _ACCESS_TOKEN_EXPIRE_SECONDS = 900  # 15 minutes
+    REFRESH_TOKEN_EXPIRE_DAYS = 7  # 7 days configuration constant
+    _REFRESH_TOKEN_EXPIRE_SECONDS = REFRESH_TOKEN_EXPIRE_DAYS * 86400  # 604,800 seconds
+
     @classmethod
-    def create_access_token(cls, data: Dict[str, Any], expires_delta: Optional[int] = 86400) -> str:
+    def generate_refresh_token(cls) -> str:
+        """
+        Generate a cryptographically secure random refresh token string.
+        Uses secrets.token_urlsafe(32) providing 256 bits of entropy.
+
+        :return: High-entropy raw refresh token string.
+        """
+        return secrets.token_urlsafe(32)
+
+    @classmethod
+    def hash_refresh_token(cls, raw_token: str) -> str:
+        """
+        Compute a secure SHA-256 one-way hash of a raw refresh token.
+
+        :param raw_token: Plaintext refresh token string.
+        :return: Hex-encoded SHA-256 hash string.
+        """
+        if not raw_token or not isinstance(raw_token, str):
+            raise ValueError("Raw refresh token must be a non-empty string.")
+        return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def create_access_token(cls, data: Dict[str, Any], expires_delta: Optional[int] = 900) -> str:
         """
         Create a signed JWT access token string containing the provided data payload.
 
         :param data: Claims dictionary to embed in payload (e.g. {'sub': 'user_id', 'username': 'admin'}).
-        :param expires_delta: Expiration duration in seconds (default 24 hours).
+        :param expires_delta: Expiration duration in seconds (default 15 minutes / 900 seconds).
         :return: Encoded JWT string 'header.payload.signature'.
         """
         header = {"alg": cls._ALGORITHM, "typ": "JWT"}
@@ -94,7 +150,7 @@ class AuthService:
         payload = data.copy()
         now = int(time.time())
         payload["iat"] = now
-        payload["exp"] = now + (expires_delta if expires_delta is not None else 86400)
+        payload["exp"] = now + (expires_delta if expires_delta is not None else cls._ACCESS_TOKEN_EXPIRE_SECONDS)
 
         payload_b64 = cls._b64encode(json.dumps(payload).encode("utf-8"))
 

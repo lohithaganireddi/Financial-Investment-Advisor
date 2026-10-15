@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, CheckCircle2, AlertTriangle, ShieldCheck, Cpu } from 'lucide-react';
+import { authenticatedFetch } from '../services/apiClient';
 
 export default function LLMReasoningCard({ analysisData }) {
   const [reasoning, setReasoning] = useState(null);
@@ -14,7 +15,7 @@ export default function LLMReasoningCard({ analysisData }) {
   const fetchLLMReasoning = async () => {
     setLoading(true);
     try {
-      const resp = await fetch('/api/llm/synthesize', {
+      const resp = await authenticatedFetch('/api/llm/synthesize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

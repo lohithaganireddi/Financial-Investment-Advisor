@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authenticatedFetch } from '../services/apiClient';
 
 const FinancialContext = createContext(null);
 
@@ -17,7 +18,7 @@ export function FinancialProvider({ children }) {
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
-      const resp = await fetch('/api/history?limit=50');
+      const resp = await authenticatedFetch('/api/history?limit=50');
       if (resp.ok) {
         const data = await resp.json();
         if (data.success && Array.isArray(data.analyses)) {
@@ -38,7 +39,7 @@ export function FinancialProvider({ children }) {
     setSelectedId(null);
 
     try {
-      const resp = await fetch('/api/analyze', {
+      const resp = await authenticatedFetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -68,7 +69,7 @@ export function FinancialProvider({ children }) {
     setSelectedId(null);
 
     try {
-      const resp = await fetch('/api/query', {
+      const resp = await authenticatedFetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -114,7 +115,7 @@ export function FinancialProvider({ children }) {
     setSelectedId(id);
 
     try {
-      const resp = await fetch(`/api/history/${id}`);
+      const resp = await authenticatedFetch(`/api/history/${id}`);
       if (resp.ok) {
         const data = await resp.json();
         if (data.success && data.analysis) {

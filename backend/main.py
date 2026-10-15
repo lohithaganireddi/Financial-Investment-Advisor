@@ -5,8 +5,9 @@ This file initializes the FastAPI backend server, database tables, health-check 
 and includes API route handlers.
 """
 
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from backend.database import init_db
 from backend.routes import router as api_router
 
@@ -29,22 +30,44 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS for local development
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+
+    env = os.getenv("ENV", "development").lower()
+    if env == "production" or request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    return response
+
+
+# Configure CORS with strict allowed origins and environment overrides
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-origins = [
+default_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+env_origins = os.getenv("CORS_ORIGINS", "")
+if env_origins:
+    extra_origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+    allowed_origins = default_origins + extra_origins
+else:
+    allowed_origins = default_origins
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
 
 # Include API routes
