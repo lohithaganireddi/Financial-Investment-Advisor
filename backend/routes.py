@@ -7,7 +7,7 @@ and orchestrator interaction.
 
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 import json
 from datetime import datetime, timezone
@@ -25,6 +25,33 @@ def _is_cookie_secure() -> bool:
     return env == "production" or cookie_secure_env == "true"
 
 
+def _get_cookie_samesite() -> str:
+    """Determine SameSite attribute: 'none' for secure production (cross-site Vercel -> Render), 'lax' for local dev."""
+    return "none" if _is_cookie_secure() else "lax"
+
+
+def get_trusted_origins() -> List[str]:
+    """
+    Return list of trusted frontend origins for CORS and CSRF validation.
+    When ENV is development (default), includes local Vite/React development origins.
+    When ENV is production, excludes localhost/127.0.0.1 origins and trusts only explicitly configured CORS_ORIGINS.
+    """
+    env = os.getenv("ENV", "development").lower()
+    env_origins = os.getenv("CORS_ORIGINS", "")
+    configured_origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+
+    if env == "production":
+        return configured_origins
+
+    dev_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    return dev_origins + configured_origins
+
+
 def set_refresh_cookie(response: Response, raw_token: str):
     """Set secure HttpOnly refresh token cookie on response object."""
     if not response or not raw_token:
@@ -36,7 +63,7 @@ def set_refresh_cookie(response: Response, raw_token: str):
         expires=REFRESH_COOKIE_MAX_AGE,
         path=REFRESH_COOKIE_PATH,
         httponly=True,
-        samesite="lax",
+        samesite=_get_cookie_samesite(),
         secure=_is_cookie_secure()
     )
 
@@ -49,7 +76,7 @@ def clear_refresh_cookie(response: Response):
         key=REFRESH_COOKIE_NAME,
         path=REFRESH_COOKIE_PATH,
         httponly=True,
-        samesite="lax",
+        samesite=_get_cookie_samesite(),
         secure=_is_cookie_secure()
     )
 from backend.schemas import (
@@ -544,8 +571,24 @@ def refresh_access_token(
     """
     Refresh authentication session using secure HttpOnly refresh cookie.
     Executes single-use refresh token rotation, updates HttpOnly cookie, and returns a new 15-minute access token.
+    Enforces strict Origin validation for cookie-authenticated browser requests to prevent CSRF.
     """
     limiter.check(raw_request, "auth:refresh")
+
+    # Explicit server-side CSRF Origin validation for cookie-authenticated browser requests
+    if sf_refresh_token and str(sf_refresh_token).strip():
+        origin = raw_request.headers.get("origin")
+        if not origin or not str(origin).strip():
+            raise HTTPException(
+                status_code=403,
+                detail="Missing Origin header for cookie authentication",
+            )
+        trusted_origins = [o.strip().rstrip("/") for o in get_trusted_origins() if o.strip()]
+        if origin.strip().rstrip("/") not in trusted_origins:
+            raise HTTPException(
+                status_code=403,
+                detail="Untrusted Origin header",
+            )
 
     raw_token = sf_refresh_token or (request.refresh_token if (request and request.refresh_token) else None)
 

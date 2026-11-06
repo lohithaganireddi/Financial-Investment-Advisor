@@ -48,23 +48,11 @@ async def add_security_headers(request: Request, call_next):
 
 # Configure CORS with strict allowed origins and environment overrides
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-
-default_origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-env_origins = os.getenv("CORS_ORIGINS", "")
-if env_origins:
-    extra_origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
-    allowed_origins = default_origins + extra_origins
-else:
-    allowed_origins = default_origins
+from backend.routes import get_trusted_origins
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=get_trusted_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],

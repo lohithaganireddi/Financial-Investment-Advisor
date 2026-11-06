@@ -71,12 +71,20 @@ export default function WatchlistWidget() {
   const connectWebSocket = () => {
     setWsStatus('CONNECTING');
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.port === '5173' || window.location.port === '3000'
-      ? '127.0.0.1:8000'
-      : window.location.host;
-
-    const wsUrl = `${protocol}//${host}/api/ws/ticker`;
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
+    let wsUrl;
+    if (apiBase) {
+      const isHttps = /^https:/i.test(apiBase);
+      const wsProtocol = isHttps ? 'wss:' : 'ws:';
+      const cleanHost = apiBase.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+      wsUrl = `${wsProtocol}//${cleanHost}/api/ws/ticker`;
+    } else {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.port === '5173' || window.location.port === '3000'
+        ? '127.0.0.1:8000'
+        : window.location.host;
+      wsUrl = `${protocol}//${host}/api/ws/ticker`;
+    }
 
     try {
       const ws = new WebSocket(wsUrl);

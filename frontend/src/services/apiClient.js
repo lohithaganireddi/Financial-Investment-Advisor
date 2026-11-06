@@ -22,7 +22,7 @@ let inFlightRefreshPromise = null;
  * Resolves relative API paths to the configured backend URL.
  * Absolute URLs are returned unchanged.
  */
-function resolveApiUrl(url) {
+export function resolveApiUrl(url) {
   if (/^https?:\/\//i.test(url)) {
     return url;
   }
@@ -49,6 +49,7 @@ export async function refreshAccessToken() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
           },
           credentials: 'include',
         }

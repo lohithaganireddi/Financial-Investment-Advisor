@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
-from backend.routes import get_user_repository
+from backend.routes import get_user_repository, get_trusted_origins
 from services.auth_service import AuthService
 from services.user_repository import UserRepository
 from services.rate_limiter import limiter
@@ -673,7 +673,7 @@ def test_refresh_endpoint_uses_httponly_cookie():
 
     try:
         client.cookies.set("sf_refresh_token", "raw_cookie_token_abc123", path="/api/auth")
-        resp = client.post("/api/auth/refresh")
+        resp = client.post("/api/auth/refresh", headers={"Origin": "http://localhost:5173"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -738,21 +738,21 @@ def test_refresh_token_rotation_chain_and_replay_protection_cookie():
 
     try:
         # Step 1: Refresh A -> sets B cookie
-        r1 = client.post("/api/auth/refresh", cookies={"sf_refresh_token": token_a})
+        r1 = client.post("/api/auth/refresh", cookies={"sf_refresh_token": token_a}, headers={"Origin": "http://localhost:5173"})
         assert r1.status_code == 200
         assert "sf_refresh_token=" + token_b in r1.headers.get("set-cookie", "")
 
         # Step 2: Refresh B -> sets C cookie
-        r2 = client.post("/api/auth/refresh", cookies={"sf_refresh_token": token_b})
+        r2 = client.post("/api/auth/refresh", cookies={"sf_refresh_token": token_b}, headers={"Origin": "http://localhost:5173"})
         assert r2.status_code == 200
         assert "sf_refresh_token=" + token_c in r2.headers.get("set-cookie", "")
 
         # Test 5: Replay A -> 401 & triggers family revocation
-        r_replay_a = client.post("/api/auth/refresh", cookies={"sf_refresh_token": token_a})
+        r_replay_a = client.post("/api/auth/refresh", cookies={"sf_refresh_token": token_a}, headers={"Origin": "http://localhost:5173"})
         assert r_replay_a.status_code == 401
 
         # Subsequent use of C also fails because family was revoked on replay
-        r_c_after_replay = client.post("/api/auth/refresh", cookies={"sf_refresh_token": token_c})
+        r_c_after_replay = client.post("/api/auth/refresh", cookies={"sf_refresh_token": token_c}, headers={"Origin": "http://localhost:5173"})
         assert r_c_after_replay.status_code == 401
     finally:
         client.cookies.clear()
@@ -770,7 +770,7 @@ def test_refresh_endpoint_missing_cookie_returns_401():
 def test_refresh_endpoint_invalid_cookie_returns_401():
     """Test 7: Refresh endpoint with invalid cookie returns 401 Unauthorized."""
     client.cookies.set("sf_refresh_token", "invalid_random_cookie_val", path="/api/auth")
-    resp = client.post("/api/auth/refresh")
+    resp = client.post("/api/auth/refresh", headers={"Origin": "http://localhost:5173"})
     assert resp.status_code == 401
     client.cookies.clear()
 
@@ -783,7 +783,7 @@ def test_refresh_endpoint_expired_token_cookie_returns_401():
 
     try:
         client.cookies.set("sf_refresh_token", "expired_cookie_val", path="/api/auth")
-        resp = client.post("/api/auth/refresh")
+        resp = client.post("/api/auth/refresh", headers={"Origin": "http://localhost:5173"})
         assert resp.status_code == 401
     finally:
         client.cookies.clear()
@@ -1008,7 +1008,7 @@ def test_logout_integration_login_refresh_logout_flow():
         access_t = AuthService.create_access_token({"sub": "77", "username": "flow_user"})
 
         # Step 2: Refresh works before logout
-        r_ref1 = client.post("/api/auth/refresh", cookies={"sf_refresh_token": t_raw})
+        r_ref1 = client.post("/api/auth/refresh", cookies={"sf_refresh_token": t_raw}, headers={"Origin": "http://localhost:5173"})
         assert r_ref1.status_code == 200
 
         # Extract new rotated cookie
@@ -1027,7 +1027,7 @@ def test_logout_integration_login_refresh_logout_flow():
         assert r_logout.status_code == 200
 
         # Step 4: Refresh fails after logout
-        r_ref2 = client.post("/api/auth/refresh", cookies={"sf_refresh_token": t_rotated})
+        r_ref2 = client.post("/api/auth/refresh", cookies={"sf_refresh_token": t_rotated}, headers={"Origin": "http://localhost:5173"})
         assert r_ref2.status_code == 401
     finally:
         client.cookies.clear()
@@ -1113,11 +1113,11 @@ def test_refresh_rate_limiting():
     try:
         client.cookies.set("sf_refresh_token", "dummy_token", path="/api/auth")
         for _ in range(30):
-            r = client.post("/api/auth/refresh")
+            r = client.post("/api/auth/refresh", headers={"Origin": "http://localhost:5173"})
             assert r.status_code == 401
 
         # 31st request triggers 429
-        resp = client.post("/api/auth/refresh")
+        resp = client.post("/api/auth/refresh", headers={"Origin": "http://localhost:5173"})
         assert resp.status_code == 429
         assert "retry-after" in resp.headers
     finally:
@@ -1151,6 +1151,241 @@ def test_cors_hardening_allowed_and_disallowed_origins():
     resp_disallowed = client.options("/api/auth/login", headers={"Origin": "http://malicious-attacker-site.com", "Access-Control-Request-Method": "POST"})
     assert resp_disallowed.headers.get("access-control-allow-origin") != "http://malicious-attacker-site.com"
 
+
+def test_production_and_development_cookie_security(monkeypatch):
+    """Test that refresh cookies use SameSite=None and Secure=True in production, and SameSite=Lax in dev."""
+    from fastapi import Response
+    from backend.routes import _is_cookie_secure, _get_cookie_samesite, set_refresh_cookie, clear_refresh_cookie
+
+    # 1. Dev mode (default)
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("COOKIE_SECURE", raising=False)
+    assert _is_cookie_secure() is False
+    assert _get_cookie_samesite() == "lax"
+
+    resp_dev = Response()
+    set_refresh_cookie(resp_dev, "token_dev_123")
+    cookie_str = resp_dev.headers.get("set-cookie", "").lower()
+    assert "samesite=lax" in cookie_str
+    assert "secure" not in cookie_str
+
+    # 2. Production mode (ENV=production)
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.delenv("COOKIE_SECURE", raising=False)
+    assert _is_cookie_secure() is True
+    assert _get_cookie_samesite() == "none"
+
+    resp_prod = Response()
+    set_refresh_cookie(resp_prod, "token_prod_456")
+    cookie_str_prod = resp_prod.headers.get("set-cookie", "").lower()
+    assert "samesite=none" in cookie_str_prod
+    assert "secure" in cookie_str_prod
+
+    # 3. Explicit COOKIE_SECURE=true
+    monkeypatch.setenv("ENV", "development")
+    monkeypatch.setenv("COOKIE_SECURE", "true")
+    assert _is_cookie_secure() is True
+    assert _get_cookie_samesite() == "none"
+
+    # 4. Clear cookie in production also clears with samesite=none & secure
+    resp_clear_prod = Response()
+    clear_refresh_cookie(resp_clear_prod)
+    clear_cookie_str = resp_clear_prod.headers.get("set-cookie", "").lower()
+    assert "samesite=none" in clear_cookie_str
+    assert "secure" in clear_cookie_str
+
+
+# ==========================================
+# CSRF Origin Validation Tests for Refresh Endpoint
+# ==========================================
+
+def test_refresh_allowed_local_dev_origin():
+    """Test that cookie-based refresh succeeds with an allowed local development Origin."""
+    mock_repo = MagicMock()
+    mock_user = MagicMock(id=40, username="local_user")
+    mock_record = MagicMock(user_id=40)
+    mock_repo.rotate_refresh_token.return_value = ("rotated_cookie_token_local", mock_record, None)
+    mock_repo.get_user_by_id.return_value = mock_user
+
+    app.dependency_overrides[get_user_repository] = lambda: mock_repo
+    try:
+        resp = client.post(
+            "/api/auth/refresh",
+            cookies={"sf_refresh_token": "valid_local_cookie"},
+            headers={"Origin": "http://localhost:5173"}
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "access_token" in data
+        assert "sf_refresh_token=rotated_cookie_token_local" in resp.headers.get("set-cookie", "")
+    finally:
+        client.cookies.clear()
+        app.dependency_overrides.clear()
+
+
+def test_refresh_allowed_production_origin(monkeypatch):
+    """Test that cookie-based refresh succeeds with an allowed production Origin configured via CORS_ORIGINS."""
+    monkeypatch.setenv("CORS_ORIGINS", "https://finsight-frontend.vercel.app")
+    mock_repo = MagicMock()
+    mock_user = MagicMock(id=41, username="prod_user")
+    mock_record = MagicMock(user_id=41)
+    mock_repo.rotate_refresh_token.return_value = ("rotated_cookie_token_prod", mock_record, None)
+    mock_repo.get_user_by_id.return_value = mock_user
+
+    app.dependency_overrides[get_user_repository] = lambda: mock_repo
+    try:
+        resp = client.post(
+            "/api/auth/refresh",
+            cookies={"sf_refresh_token": "valid_prod_cookie"},
+            headers={"Origin": "https://finsight-frontend.vercel.app"}
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "access_token" in data
+        assert "sf_refresh_token=rotated_cookie_token_prod" in resp.headers.get("set-cookie", "")
+    finally:
+        client.cookies.clear()
+        app.dependency_overrides.clear()
+
+
+def test_refresh_rejected_untrusted_origin():
+    """Test that cookie-based refresh fails with 403 Forbidden when an untrusted Origin header is sent."""
+    mock_repo = MagicMock()
+    app.dependency_overrides[get_user_repository] = lambda: mock_repo
+    try:
+        resp = client.post(
+            "/api/auth/refresh",
+            cookies={"sf_refresh_token": "valid_cookie_val"},
+            headers={"Origin": "https://malicious-attacker-site.com"}
+        )
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Untrusted Origin header"
+        mock_repo.rotate_refresh_token.assert_not_called()
+    finally:
+        client.cookies.clear()
+        app.dependency_overrides.clear()
+
+
+def test_refresh_rejected_missing_origin_on_cookie():
+    """Test that cookie-based refresh fails with 403 Forbidden when Origin header is missing."""
+    mock_repo = MagicMock()
+    app.dependency_overrides[get_user_repository] = lambda: mock_repo
+    try:
+        resp = client.post(
+            "/api/auth/refresh",
+            cookies={"sf_refresh_token": "valid_cookie_val"}
+        )
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Missing Origin header for cookie authentication"
+        mock_repo.rotate_refresh_token.assert_not_called()
+    finally:
+        client.cookies.clear()
+        app.dependency_overrides.clear()
+
+
+def test_refresh_json_fallback_for_non_browser_clients():
+    """Test that non-browser clients without cookies can refresh using the JSON body fallback without Origin enforcement."""
+    mock_repo = MagicMock()
+    mock_user = MagicMock(id=42, username="cli_user")
+    mock_record = MagicMock(user_id=42)
+    mock_repo.rotate_refresh_token.return_value = ("rotated_json_token", mock_record, None)
+    mock_repo.get_user_by_id.return_value = mock_user
+
+    app.dependency_overrides[get_user_repository] = lambda: mock_repo
+    try:
+        # Request with NO cookie and NO Origin header, but with JSON body
+        client.cookies.clear()
+        resp = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": "cli_raw_token_xyz"}
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "access_token" in data
+    finally:
+        client.cookies.clear()
+        app.dependency_overrides.clear()
+
+
+def test_trusted_origins_development_includes_localhost(monkeypatch):
+    """Test that in development mode, get_trusted_origins includes default localhost/127.0.0.1 origins."""
+    monkeypatch.setenv("ENV", "development")
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+    origins = get_trusted_origins()
+    assert "http://localhost:5173" in origins
+    assert "http://127.0.0.1:5173" in origins
+    assert "http://localhost:3000" in origins
+    assert "http://127.0.0.1:3000" in origins
+
+
+def test_trusted_origins_production_excludes_localhost(monkeypatch):
+    """Test that in production mode, get_trusted_origins strictly excludes localhost and only trusts CORS_ORIGINS."""
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+    origins = get_trusted_origins()
+    assert "http://localhost:5173" not in origins
+    assert "http://127.0.0.1:5173" not in origins
+    assert "http://localhost:3000" not in origins
+    assert "http://127.0.0.1:3000" not in origins
+    assert origins == []
+
+
+def test_production_accepts_configured_vercel_origin(monkeypatch):
+    """Test that in production mode, refresh succeeds with an explicitly configured Vercel frontend origin."""
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://finsight-frontend.vercel.app")
+    mock_repo = MagicMock()
+    mock_user = MagicMock(id=50, username="prod_vercel_user")
+    mock_record = MagicMock(user_id=50)
+    mock_repo.rotate_refresh_token.return_value = ("rotated_prod_token", mock_record, None)
+    mock_repo.get_user_by_id.return_value = mock_user
+
+    app.dependency_overrides[get_user_repository] = lambda: mock_repo
+    try:
+        resp = client.post(
+            "/api/auth/refresh",
+            cookies={"sf_refresh_token": "valid_prod_cookie"},
+            headers={"Origin": "https://finsight-frontend.vercel.app"}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert "access_token" in resp.json()
+    finally:
+        client.cookies.clear()
+        app.dependency_overrides.clear()
+
+
+def test_production_rejects_localhost_and_malicious_origin(monkeypatch):
+    """Test that in production mode, refresh rejects unconfigured localhost and malicious origins."""
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://finsight-frontend.vercel.app")
+    mock_repo = MagicMock()
+    app.dependency_overrides[get_user_repository] = lambda: mock_repo
+    try:
+        # Rejects localhost in production
+        resp_localhost = client.post(
+            "/api/auth/refresh",
+            cookies={"sf_refresh_token": "valid_prod_cookie"},
+            headers={"Origin": "http://localhost:5173"}
+        )
+        assert resp_localhost.status_code == 403
+        assert resp_localhost.json()["detail"] == "Untrusted Origin header"
+
+        # Rejects malicious attacker in production
+        resp_malicious = client.post(
+            "/api/auth/refresh",
+            cookies={"sf_refresh_token": "valid_prod_cookie"},
+            headers={"Origin": "https://evil-attacker.com"}
+        )
+        assert resp_malicious.status_code == 403
+        assert resp_malicious.json()["detail"] == "Untrusted Origin header"
+        mock_repo.rotate_refresh_token.assert_not_called()
+    finally:
+        client.cookies.clear()
+        app.dependency_overrides.clear()
 
 
 

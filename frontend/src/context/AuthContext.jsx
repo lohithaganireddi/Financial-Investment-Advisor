@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { refreshAccessToken, authenticatedFetch } from '../services/apiClient';
+import { refreshAccessToken, authenticatedFetch, resolveApiUrl } from '../services/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -47,7 +47,7 @@ export function AuthProvider({ children }) {
     }
 
     try {
-      const resp = await fetch('/api/auth/me', {
+      const resp = await fetch(resolveApiUrl('/api/auth/me'), {
         headers: { Authorization: `Bearer ${activeToken}` },
         credentials: 'include',
       });
@@ -65,7 +65,7 @@ export function AuthProvider({ children }) {
           const newToken = await refreshAccessToken();
           if (newToken) {
             setToken(newToken);
-            const retryResp = await fetch('/api/auth/me', {
+            const retryResp = await fetch(resolveApiUrl('/api/auth/me'), {
               headers: { Authorization: `Bearer ${newToken}` },
               credentials: 'include',
             });
@@ -100,7 +100,7 @@ export function AuthProvider({ children }) {
 
   const login = async (username, password) => {
     try {
-      const resp = await fetch('/api/auth/login', {
+      const resp = await fetch(resolveApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -123,7 +123,7 @@ export function AuthProvider({ children }) {
 
   const register = async (username, email, password) => {
     try {
-      const resp = await fetch('/api/auth/register', {
+      const resp = await fetch(resolveApiUrl('/api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
